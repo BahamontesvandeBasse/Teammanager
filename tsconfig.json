@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,7 +23,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
   "include": [
@@ -28,7 +34,37 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-preview-53054/types/**/*.ts",
+    ".next-preview-53054/dev/types/**/*.ts",
+    ".next-preview-3000/types/**/*.ts",
+    ".next-preview-3000/dev/types/**/*.ts",
+    ".next-preview-65163/types/**/*.ts",
+    ".next-preview-65163/dev/types/**/*.ts",
+    ".next-preview-64238/types/**/*.ts",
+    ".next-preview-64238/dev/types/**/*.ts",
+    ".next-preview-63450/types/**/*.ts",
+    ".next-preview-63450/dev/types/**/*.ts",
+    ".next-preview-64356/types/**/*.ts",
+    ".next-preview-64356/dev/types/**/*.ts",
+    ".next-preview-61488/types/**/*.ts",
+    ".next-preview-61488/dev/types/**/*.ts",
+    ".next-preview-51963/types/**/*.ts",
+    ".next-preview-51963/dev/types/**/*.ts",
+    ".next-preview-61631/types/**/*.ts",
+    ".next-preview-61631/dev/types/**/*.ts",
+    ".next-preview-50859/types/**/*.ts",
+    ".next-preview-50859/dev/types/**/*.ts",
+    ".next-preview-53790/types/**/*.ts",
+    ".next-preview-53790/dev/types/**/*.ts",
+    ".next-preview-49388/types/**/*.ts",
+    ".next-preview-49388/dev/types/**/*.ts",
+    ".next-preview-62441/types/**/*.ts",
+    ".next-preview-62441/dev/types/**/*.ts",
+    ".next-preview-54638/types/**/*.ts",
+    ".next-preview-54638/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.voetbal.nl)",
+      "PowerShell(node -v)",
+      "PowerShell(npm -v)",
+      "PowerShell(Test-Path \"C:\\\\Program Files\\\\nodejs\\\\node.exe\"; Test-Path \"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\node.exe\"; winget --version)",
+      "PowerShell(winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent)",
+      "PowerShell($dest = \"$env:LOCALAPPDATA\\\\nodejs-portable\"; New-Item -ItemType Directory -Force $dest | Out-Null; $zip = \"$env:TEMP\\\\node-v22.21.1-win-x64.zip\"; Invoke-WebRequest -Uri \"https://nodejs.org/dist/v22.21.1/node-v22.21.1-win-x64.zip\" -OutFile $zip; \\(Get-Item $zip\\).Length)",
+      "PowerShell($dest = \"$env:LOCALAPPDATA\\\\nodejs-portable\"; $zip = \"$env:TEMP\\\\node-v22.21.1-win-x64.zip\"; Expand-Archive -Path $zip -DestinationPath $dest -Force; & \"$dest\\\\node-v22.21.1-win-x64\\\\node.exe\" -v)",
+      "PowerShell($root = \"C:\\\\Users\\\\s.wijdenes\\\\OneDrive - Van Gelder Groep BV\\\\Bureaublad\\\\Sander Wijdenes\\\\AI Claude\\\\Teammanager\"; Get-ChildItem -Force \"$root\\\\teammanager\" | Move-Item -Destination $root -Force; Remove-Item \"$root\\\\teammanager\" -Force; Get-ChildItem -Force $root | Select-Object Name)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npm install; npm install @supabase/supabase-js @supabase/ssr xlsx recharts date-fns)",
+      "PowerShell(Remove-Item \"C:\\\\Users\\\\s.wijdenes\\\\OneDrive - Van Gelder Groep BV\\\\Bureaublad\\\\Sander Wijdenes\\\\AI Claude\\\\Teammanager\\\\app\\\\page.tsx\" -Confirm:$false)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npm run build)",
+      "PowerShell(Move-Item \"C:\\\\Users\\\\s.wijdenes\\\\OneDrive - Van Gelder Groep BV\\\\Bureaublad\\\\Sander Wijdenes\\\\AI Claude\\\\Teammanager\\\\middleware.ts\" \"C:\\\\Users\\\\s.wijdenes\\\\OneDrive - Van Gelder Groep BV\\\\Bureaublad\\\\Sander Wijdenes\\\\AI Claude\\\\Teammanager\\\\proxy.ts\")",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npm run lint)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npx eslint --fix; npm run lint)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npx --yes tsx scripts/test-logic.ts)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npx tsx scripts/test-logic.ts)",
+      "PowerShell($names = \"Bram de Vries\",\"Daan Bakker\",\"Finn Visser\",\"Gijs Smit\",\"Jesse de Boer\",\"Koen Mulder\",\"Lars van Dijk\",\"Mees Jansen\",\"Milan de Jong\",\"Niek Bos\",\"Ruben Vos\",\"Sem Dekker\",\"Stijn Kok\",\"Teun Hendriks\",\"Thijs Peters\"; $i = 1; $players = $names | ForEach-Object { @{ name = $_; shirt_number = $i; position = $null; birthdate = $null; parent_contact = $null; active = $true }; $i++ }; $json = ConvertTo-Json @\\($players\\) -Depth 3; Invoke-RestMethod -Uri \"http://localhost:3000/api/data/players\" -Method Post -ContentType \"application/json\" -Body $json | Measure-Object | Select-Object Count)",
+      "PowerShell(curl.exe -s -o NUL -w \"%{http_code}\" http://127.0.0.1:3000/api/data/players)",
+      "PowerShell(curl.exe -s -o NUL -w \" %{http_code}\" http://localhost:3000/api/data/players)",
+      "PowerShell($env:PATH = \"$env:LOCALAPPDATA\\\\nodejs-portable\\\\node-v22.21.1-win-x64;$env:PATH\"; npm run build; npm run lint)"
+    ]
+  }
+}

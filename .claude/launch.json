@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "teammanager",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "C:\\Users\\s.wijdenes\\OneDrive - Van Gelder Groep BV\\Bureaublad\\Sander Wijdenes\\AI Claude\\Teammanager\\.claude\\dev-server.cmd"
+      ],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}
