@@ -11,6 +11,7 @@ import { AbsenceChip } from "@/components/PlayerAbsence";
 import { ageFromBirthdate, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { Absence, Player, StaffMember } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function sortPlayers(list: Player[]): Player[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, "nl"));
@@ -30,6 +31,7 @@ const JERSEY_STYLE = {
 
 export default function SpelersPage() {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -159,6 +161,7 @@ export default function SpelersPage() {
         subtitle="Importeer de spelerslijst uit Sportlink (Excel) of voeg spelers handmatig toe."
       />
 
+      {canEdit && (
       <Card className="mb-6">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="font-semibold">Speler toevoegen</h2>
@@ -199,6 +202,7 @@ export default function SpelersPage() {
         </div>
         <Message text={msg} error={err} />
       </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 font-semibold">
@@ -235,9 +239,10 @@ export default function SpelersPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <input
-                        className="w-full bg-transparent text-center outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.5)]"
+                        className="w-full bg-transparent text-center outline-none [text-shadow:0_1px_2px_rgba(0,0,0,0.5)] disabled:cursor-default"
                         defaultValue={p.shirt_number ?? ""}
                         placeholder="?"
+                        disabled={!canEdit}
                         onBlur={(e) => e.target.value !== String(p.shirt_number ?? "") && updateShirtNumber(p, e.target.value)}
                       />
                     </div>
@@ -246,27 +251,33 @@ export default function SpelersPage() {
                       {p.birthdate && (
                         <div className="text-xs text-slate-400">{ageFromBirthdate(p.birthdate)} jaar</div>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleActive(p);
-                        }}
-                        title="Klik om te wisselen"
-                      >
+                      {canEdit ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleActive(p);
+                          }}
+                          title="Klik om te wisselen"
+                        >
+                          <Badge color={p.active ? "green" : "slate"}>{p.active ? "Actief" : "Inactief"}</Badge>
+                        </button>
+                      ) : (
                         <Badge color={p.active ? "green" : "slate"}>{p.active ? "Actief" : "Inactief"}</Badge>
-                      </button>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removePlayer(p);
-                    }}
-                    className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-                    title="Verwijderen"
-                  >
-                    ✕
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePlayer(p);
+                      }}
+                      className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                      title="Verwijderen"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 {absenceStatus && (
@@ -282,20 +293,24 @@ export default function SpelersPage() {
                       className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700"
                     >
                       {pos}
-                      <button onClick={() => togglePosition(p, pos)} className="text-slate-400 hover:text-red-500">
-                        ×
-                      </button>
+                      {canEdit && (
+                        <button onClick={() => togglePosition(p, pos)} className="text-slate-400 hover:text-red-500">
+                          ×
+                        </button>
+                      )}
                     </span>
                   ))}
-                  <button
-                    onClick={() => setEditingPositionsFor(editingPositionsFor === p.id ? null : p.id)}
-                    className="rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-xs text-slate-500 hover:border-rose-500 hover:text-rose-600"
-                  >
-                    +
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => setEditingPositionsFor(editingPositionsFor === p.id ? null : p.id)}
+                      className="rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-xs text-slate-500 hover:border-rose-500 hover:text-rose-600"
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
 
-                {editingPositionsFor === p.id && (
+                {canEdit && editingPositionsFor === p.id && (
                   <div onClick={(e) => e.stopPropagation()} className="flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 p-2">
                     {POSITION_PRESETS.map((code) => (
                       <button
@@ -333,6 +348,7 @@ export default function SpelersPage() {
         <p className="mb-3 text-xs text-slate-500">
           Trainers, leiders en begeleiding — staat los van de spelerslijst en telt niet mee in de was- en rijrotatie.
         </p>
+        {canEdit && (
         <div className="mb-4 flex flex-wrap gap-3">
           <input
             className={inputCls}
@@ -350,6 +366,7 @@ export default function SpelersPage() {
           />
           <Button onClick={addStaff}>Toevoegen</Button>
         </div>
+        )}
         {staff.length === 0 ? (
           <p className="text-sm text-slate-500">Nog geen stafleden toegevoegd.</p>
         ) : (
@@ -374,24 +391,27 @@ export default function SpelersPage() {
                         <div className="text-xs text-slate-400">{ageFromBirthdate(s.birthdate)} jaar</div>
                       )}
                       <input
-                        className="w-full truncate bg-transparent text-xs text-slate-400 outline-none placeholder:text-slate-300"
+                        className="w-full truncate bg-transparent text-xs text-slate-400 outline-none placeholder:text-slate-300 disabled:cursor-default"
                         defaultValue={s.role ?? ""}
                         placeholder="Taak toevoegen"
+                        disabled={!canEdit}
                         onClick={(e) => e.stopPropagation()}
                         onBlur={(e) => e.target.value !== (s.role ?? "") && updateStaffRole(s, e.target.value)}
                       />
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeStaff(s);
-                    }}
-                    className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
-                    title="Verwijderen"
-                  >
-                    ✕
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeStaff(s);
+                      }}
+                      className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                      title="Verwijderen"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
                 <div className="mt-auto text-right text-xs font-medium text-rose-600 opacity-0 transition-opacity group-hover:opacity-100">
                   profiel →

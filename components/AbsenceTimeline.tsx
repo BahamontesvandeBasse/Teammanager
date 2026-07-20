@@ -50,7 +50,7 @@ function TimelineSection({
   rangeStart: string;
   rangeEnd: string;
   today: string;
-  onRemove: (a: Absence) => void;
+  onRemove?: (a: Absence) => void;
 }) {
   const totalDays = daysBetween(rangeStart, rangeEnd);
 
@@ -126,13 +126,15 @@ function TimelineSection({
                       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                       title={`${formatDateShort(a.from)} t/m ${formatDateShort(a.until)}${a.reason ? ` — ${a.reason}` : ""}`}
                     >
-                      <button
-                        onClick={() => onRemove(a)}
-                        className="invisible absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] leading-none text-red-500 shadow ring-1 ring-slate-200 group-hover:visible"
-                        title="Verwijderen"
-                      >
-                        ×
-                      </button>
+                      {onRemove && (
+                        <button
+                          onClick={() => onRemove(a)}
+                          className="invisible absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] leading-none text-red-500 shadow ring-1 ring-slate-200 group-hover:visible"
+                          title="Verwijderen"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -154,7 +156,7 @@ export function AbsenceTimeline({
   players: Player[];
   staff: StaffMember[];
   absences: Absence[];
-  onRemove: (a: Absence) => void;
+  onRemove?: (a: Absence) => void;
 }) {
   const today = todayIso();
 

@@ -28,6 +28,7 @@ import {
   WashDuty,
   emptyTacticalNotes,
 } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function drawingLabel(key: string): string {
   if (key === "team") return "Team-niveau";
@@ -104,6 +105,7 @@ export default function WedstrijdenPage() {
 }
 
 function WedstrijdenPageInner() {
+  const canEdit = useCanEdit();
   const searchParams = useSearchParams();
   const preselectMatch = searchParams.get("match");
 
@@ -495,6 +497,7 @@ function WedstrijdenPageInner() {
 
       {selected && (
         <>
+          <fieldset disabled={!canEdit} className="contents">
           <Card className="mb-6">
             <div className="mb-1 flex items-start justify-between gap-3">
               <h2 className="font-semibold">
@@ -832,6 +835,7 @@ function WedstrijdenPageInner() {
             <Button onClick={save} disabled={busy}>{busy ? "Opslaan…" : "Opslaan"}</Button>
             <Message text={msg} error={err} />
           </div>
+          </fieldset>
 
           {selectedIsPlayed && (
             <>
@@ -841,6 +845,7 @@ function WedstrijdenPageInner() {
                   <div className="flex flex-col gap-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Uitslag</span>
+                      <fieldset disabled={!canEdit} className="contents">
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
@@ -862,6 +867,7 @@ function WedstrijdenPageInner() {
                           }
                         />
                       </div>
+                      </fieldset>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Aanwezig op locatie</span>
@@ -896,6 +902,7 @@ function WedstrijdenPageInner() {
 
               <Card className="mb-6">
                 <h2 className="mb-3 font-semibold">Statistieken</h2>
+                <fieldset disabled={!canEdit} className="contents">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -964,6 +971,7 @@ function WedstrijdenPageInner() {
                     </tbody>
                   </table>
                 </div>
+                </fieldset>
               </Card>
 
               <Card className="mb-6">

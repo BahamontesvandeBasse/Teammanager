@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { formatDate, formatDateShort } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { Match, MatchStat, Player, VideoLink, VideoNote } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type StatDraft = Partial<{ goals: string; assists: string; minutes: string; rating: string }>;
 type StatField = "goals" | "assists" | "minutes" | "rating";
@@ -46,6 +47,7 @@ export default function ResultatenPage() {
 }
 
 function ResultatenPageInner() {
+  const canEdit = useCanEdit();
   const searchParams = useSearchParams();
   const preselectMatch = searchParams.get("match");
 
@@ -420,6 +422,7 @@ function ResultatenPageInner() {
 
           <Card className="mb-6">
             <h2 className="mb-3 font-semibold">Statistieken</h2>
+            <fieldset disabled={!canEdit} className="disabled:opacity-70">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -485,6 +488,7 @@ function ResultatenPageInner() {
             <div className="mt-4">
               <Button onClick={saveStats} disabled={busy}>{busy ? "Opslaan…" : "Opslaan"}</Button>
             </div>
+            </fieldset>
           </Card>
 
           <Card className="mb-6">
@@ -506,12 +510,15 @@ function ResultatenPageInner() {
                       <span className="text-slate-500">— {v.veo_url}</span>
                       {v.ai_advice && <span className="ml-2 text-rose-700">✓ advies aanwezig</span>}
                     </button>
-                    <Button variant="danger" onClick={() => removeVideo(v.id)}>Verwijderen</Button>
+                    {canEdit && (
+                      <Button variant="danger" onClick={() => removeVideo(v.id)}>Verwijderen</Button>
+                    )}
                   </div>
                 ))}
               </div>
             )}
 
+            {canEdit && (
             <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-600">Titel (optioneel)</label>
@@ -523,6 +530,7 @@ function ResultatenPageInner() {
               </div>
               <Button onClick={addVideo} disabled={busy || !newUrl.trim()}>Toevoegen</Button>
             </div>
+            )}
           </Card>
 
           {currentVideo && (
@@ -549,7 +557,9 @@ function ResultatenPageInner() {
                           <td className={tdCls}>{players.find((p) => p.id === n.player_id)?.name ?? "—"}</td>
                           <td className={tdCls}>{n.note}</td>
                           <td className={tdCls}>
-                            <Button variant="danger" onClick={() => removeNote(n.id)}>×</Button>
+                            {canEdit && (
+                              <Button variant="danger" onClick={() => removeNote(n.id)}>×</Button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -558,6 +568,7 @@ function ResultatenPageInner() {
                 </div>
               )}
 
+              {canEdit && (
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Tijdstip (mm:ss)</label>
@@ -583,13 +594,16 @@ function ResultatenPageInner() {
                 </div>
                 <Button onClick={addNote} disabled={busy || !noteText.trim()}>Toevoegen</Button>
               </div>
+              )}
 
               <div className="mt-6 border-t border-slate-200 pt-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">AI-advies</h3>
-                  <Button onClick={generateAdvice} disabled={generating || currentNotes.length === 0}>
-                    {generating ? "Bezig…" : currentVideo.ai_advice ? "Opnieuw genereren" : "Genereer AI-advies"}
-                  </Button>
+                  {canEdit && (
+                    <Button onClick={generateAdvice} disabled={generating || currentNotes.length === 0}>
+                      {generating ? "Bezig…" : currentVideo.ai_advice ? "Opnieuw genereren" : "Genereer AI-advies"}
+                    </Button>
+                  )}
                 </div>
                 {currentNotes.length === 0 && (
                   <p className="mt-2 text-sm text-slate-500">Voeg eerst observaties toe — het advies wordt daarop gebaseerd.</p>

@@ -9,6 +9,7 @@ import { computeMatchTimes, computeScheduleItemTimes } from "@/lib/schedule";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { AbsenceTimeline } from "@/components/AbsenceTimeline";
 import { Absence, Club, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type Tab = "wedstrijden" | "agenda";
 
@@ -40,6 +41,7 @@ function splitByDate<T>(list: T[], dateOf: (t: T) => string, today: string): { u
 }
 
 export default function ProgrammaPage() {
+  const canEdit = useCanEdit();
   const [tab, setTab] = useState<Tab>("wedstrijden");
 
   const [matches, setMatches] = useState<Match[]>([]);
@@ -365,6 +367,7 @@ export default function ProgrammaPage() {
               <input
                 type="number"
                 min={0}
+                disabled={!canEdit}
                 className={`${inputCls} w-14`}
                 defaultValue={m.score_for ?? ""}
                 placeholder="-"
@@ -376,6 +379,7 @@ export default function ProgrammaPage() {
               <input
                 type="number"
                 min={0}
+                disabled={!canEdit}
                 className={`${inputCls} w-14`}
                 defaultValue={m.score_against ?? ""}
                 placeholder="-"
@@ -395,9 +399,11 @@ export default function ProgrammaPage() {
           </Link>
         </td>
         <td className={tdCls}>
-          <button className="text-xs text-red-500 hover:underline" onClick={() => removeMatch(m)}>
-            verwijderen
-          </button>
+          {canEdit && (
+            <button className="text-xs text-red-500 hover:underline" onClick={() => removeMatch(m)}>
+              verwijderen
+            </button>
+          )}
         </td>
       </tr>
     );
@@ -488,6 +494,7 @@ export default function ProgrammaPage() {
         <td className={tdCls}>
           <input
             type="time"
+            disabled={!canEdit}
             className={`${inputCls} w-24`}
             defaultValue={item.kickoff_time ?? ""}
             onBlur={(e) =>
@@ -499,6 +506,7 @@ export default function ProgrammaPage() {
         <td className={tdCls}>
           <select
             className={inputCls}
+            disabled={!canEdit}
             defaultValue={item.home_away ?? ""}
             onChange={(e) => updateField(item, "home_away", e.target.value)}
           >
@@ -513,6 +521,7 @@ export default function ProgrammaPage() {
               <input
                 type="number"
                 min={0}
+                disabled={!canEdit}
                 className={`${inputCls} w-20`}
                 defaultValue={item.travel_time_minutes ?? ""}
                 placeholder="?"
@@ -542,6 +551,7 @@ export default function ProgrammaPage() {
         <td className={`${tdCls} min-w-[22rem]`}>
           <input
             type="text"
+            disabled={!canEdit}
             className={`${inputCls} w-full min-w-[22rem]`}
             defaultValue={item.notes ?? ""}
             onBlur={(e) =>
@@ -550,9 +560,11 @@ export default function ProgrammaPage() {
           />
         </td>
         <td className={tdCls}>
-          <button className="text-xs text-red-500 hover:underline" onClick={() => removeItem(item)}>
-            verwijderen
-          </button>
+          {canEdit && (
+            <button className="text-xs text-red-500 hover:underline" onClick={() => removeItem(item)}>
+              verwijderen
+            </button>
+          )}
         </td>
       </tr>
     );
@@ -609,6 +621,8 @@ export default function ProgrammaPage() {
 
       {tab === "wedstrijden" && (
         <>
+          {canEdit && (
+          <>
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <h2 className="mb-3 font-semibold">Plakken vanaf voetbal.nl</h2>
@@ -717,8 +731,10 @@ export default function ProgrammaPage() {
               </div>
             </Card>
           )}
+          </>
+          )}
 
-          {relevantClubs.length > 0 && (
+          {canEdit && relevantClubs.length > 0 && (
             <Card className="mt-6">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <h2 className="font-semibold">Reistijden uitwedstrijden 🚗</h2>
@@ -789,6 +805,7 @@ export default function ProgrammaPage() {
 
       {tab === "agenda" && (
         <>
+          {canEdit && (
           <Card>
             <h2 className="mb-3 font-semibold">Training of toernooi toevoegen</h2>
             <p className="mb-3 text-xs text-slate-500">
@@ -842,12 +859,14 @@ export default function ProgrammaPage() {
               <Button onClick={addItem}>Toevoegen</Button>
             </div>
           </Card>
+          )}
 
           <Card className="mt-6">
             <h2 className="mb-1 font-semibold">Afwezigheid beheren</h2>
             <p className="mb-3 text-xs text-slate-500">
               Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
             </p>
+            {canEdit && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)}>
                 <option value="">— Kies speler/staflid —</option>
@@ -873,9 +892,10 @@ export default function ProgrammaPage() {
               />
               <Button onClick={addAbsence}>Toevoegen</Button>
             </div>
+            )}
 
             <div className="mt-5">
-              <AbsenceTimeline players={players} staff={staff} absences={absences} onRemove={removeAbsence} />
+              <AbsenceTimeline players={players} staff={staff} absences={absences} onRemove={canEdit ? removeAbsence : undefined} />
             </div>
           </Card>
 

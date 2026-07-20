@@ -1,5 +1,5 @@
-// Past db/migrations/001_schema.sql toe op de Neon-database.
-// Uitvoeren: node scripts/apply-schema.mjs
+// Past een migratiebestand uit db/migrations/ toe op de Neon-database.
+// Uitvoeren: node scripts/apply-schema.mjs [bestandsnaam.sql]  (standaard: 001_schema.sql)
 import { promises as fs } from "fs";
 import path from "path";
 import { neon } from "@neondatabase/serverless";
@@ -39,7 +39,8 @@ async function main() {
   }
 
   const sql = neon(process.env.DATABASE_URL);
-  const filePath = path.join(process.cwd(), "db", "migrations", "001_schema.sql");
+  const fileName = process.argv[2] || "001_schema.sql";
+  const filePath = path.join(process.cwd(), "db", "migrations", fileName);
   const statements = splitStatements(await fs.readFile(filePath, "utf-8"));
 
   let ok = 0;
@@ -52,7 +53,7 @@ async function main() {
       process.exit(1);
     }
   }
-  console.log(`✅ Schema toegepast (${ok} statements uitgevoerd).`);
+  console.log(`✅ ${fileName} toegepast (${ok} statements uitgevoerd).`);
 }
 
 main();

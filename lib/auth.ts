@@ -33,8 +33,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user) return null;
         const valid = await verifyPassword(password, user.password_hash);
         if (!valid) return null;
-        return { id: user.id, email: user.email, name: user.name };
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          playerId: user.player_id,
+        };
       },
     }),
   ],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) {
+        token.role = user.role;
+        token.playerId = user.playerId;
+      }
+      return token;
+    },
+    session({ session, token }) {
+      session.user.role = token.role;
+      session.user.playerId = token.playerId;
+      return session;
+    },
+  },
 });

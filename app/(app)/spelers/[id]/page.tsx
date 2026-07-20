@@ -9,6 +9,7 @@ import { playerAbsenceStatus } from "@/lib/absence";
 import { Badge, Button, Card, Message, PageTitle, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
 import { Absence, LoadEntry, Match, MatchStat, Player, VideoLink, VideoNote } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -17,6 +18,7 @@ function formatTimestamp(seconds: number): string {
 }
 
 export default function PlayerProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const canEdit = useCanEdit();
   const { id } = use(params);
 
   const [player, setPlayer] = useState<Player | null>(null);
@@ -179,6 +181,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             <label className="mb-1 block text-xs font-medium text-slate-600">Contact</label>
             <input
               className={`${inputCls} w-64`}
+              disabled={!canEdit}
               defaultValue={player.parent_contact ?? ""}
               placeholder="Telefoon of e-mail"
               onBlur={(e) => e.target.value !== (player.parent_contact ?? "") && updateContact(e.target.value)}
@@ -188,11 +191,13 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             <label className="mb-1 block text-xs font-medium text-slate-600">Geboortedatum</label>
             <input
               type="date"
+              disabled={!canEdit}
               className={inputCls}
               defaultValue={player.birthdate ?? ""}
               onBlur={(e) => e.target.value !== (player.birthdate ?? "") && updateBirthdate(e.target.value)}
             />
           </div>
+          {canEdit && (
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Mobiel invulscherm</label>
             {player.token ? (
@@ -201,6 +206,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
               <Button variant="secondary" onClick={generateLink}>Genereer link</Button>
             )}
           </div>
+          )}
         </div>
         <p className="mt-2 text-xs text-slate-500">
           De link geeft toegang tot het mobiele invulscherm (belasting/RPE en berichten) — geen inloggen nodig, gewoon delen als tekstbericht.
@@ -210,9 +216,11 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       <Card>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">AI-samenvatting</h2>
-          <Button onClick={generateSummary} disabled={generating || !hasData}>
-            {generating ? "Bezig…" : player.ai_summary ? "Opnieuw genereren" : "Genereer samenvatting"}
-          </Button>
+          {canEdit && (
+            <Button onClick={generateSummary} disabled={generating || !hasData}>
+              {generating ? "Bezig…" : player.ai_summary ? "Opnieuw genereren" : "Genereer samenvatting"}
+            </Button>
+          )}
         </div>
         {!hasData && (
           <p className="text-sm text-slate-500">

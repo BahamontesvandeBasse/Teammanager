@@ -8,8 +8,10 @@ import { staffAbsenceStatus } from "@/lib/absence";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
 import { Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { Absence, StaffMember } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 export default function StaffProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const canEdit = useCanEdit();
   const { id } = use(params);
 
   const [staffMember, setStaffMember] = useState<StaffMember | null>(null);
@@ -74,7 +76,7 @@ export default function StaffProfilePage({ params }: { params: Promise<{ id: str
         {staffMember.birthdate && (
           <span className="text-sm text-slate-500">{ageFromBirthdate(staffMember.birthdate)} jaar · </span>
         )}
-        {editingRole ? (
+        {editingRole && canEdit ? (
           <input
             autoFocus
             className="mt-1 w-full max-w-sm rounded border border-rose-300 bg-white px-2 py-1 text-sm text-slate-700 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
@@ -83,7 +85,7 @@ export default function StaffProfilePage({ params }: { params: Promise<{ id: str
             onBlur={(e) => (e.target.value !== (staffMember.role ?? "") ? updateRole(e.target.value) : setEditingRole(false))}
             onKeyDown={(e) => e.key === "Escape" && setEditingRole(false)}
           />
-        ) : (
+        ) : canEdit ? (
           <button
             onClick={() => setEditingRole(true)}
             className="mt-1 text-sm text-slate-500 hover:text-rose-600 hover:underline"
@@ -91,6 +93,8 @@ export default function StaffProfilePage({ params }: { params: Promise<{ id: str
           >
             {staffMember.role || "Taak toevoegen"}
           </button>
+        ) : (
+          <span className="mt-1 text-sm text-slate-500">{staffMember.role}</span>
         )}
       </div>
 
@@ -103,6 +107,7 @@ export default function StaffProfilePage({ params }: { params: Promise<{ id: str
             <label className="mb-1 block text-xs font-medium text-slate-600">Contact</label>
             <input
               className={`${inputCls} w-full max-w-sm`}
+              disabled={!canEdit}
               defaultValue={staffMember.contact ?? ""}
               placeholder="Telefoon of e-mail"
               onBlur={(e) => e.target.value !== (staffMember.contact ?? "") && updateContact(e.target.value)}
@@ -112,6 +117,7 @@ export default function StaffProfilePage({ params }: { params: Promise<{ id: str
             <label className="mb-1 block text-xs font-medium text-slate-600">Geboortedatum</label>
             <input
               type="date"
+              disabled={!canEdit}
               className={inputCls}
               defaultValue={staffMember.birthdate ?? ""}
               onBlur={(e) => e.target.value !== (staffMember.birthdate ?? "") && updateBirthdate(e.target.value)}

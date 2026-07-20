@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { isAdmin, Role } from "@/lib/auth/roles";
 
 type NavItem = { href: string; label: string; icon: string };
 type NavGroup = { label: string; icon: string; items: NavItem[] };
@@ -43,13 +44,17 @@ function groupContainsActive(group: NavGroup, pathname: string): boolean {
   return group.items.some((i) => isActiveHref(pathname, i.href));
 }
 
-export default function Nav() {
+export default function Nav({ role }: { role: Role }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // Alleen expliciete gebruikersacties (klik op een groep) — automatisch openklappen
   // van de groep met de actieve pagina wordt hieronder puur uit `pathname` afgeleid,
   // zodat we geen state-in-effect nodig hebben.
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+
+  const nav = isAdmin(role)
+    ? [...NAV, { href: "/admin/gebruikers", label: "Gebruikers", icon: "🔑" }]
+    : NAV;
 
   function isGroupOpen(group: NavGroup): boolean {
     return group.label in overrides ? overrides[group.label] : groupContainsActive(group, pathname);
@@ -100,7 +105,7 @@ export default function Nav() {
     );
   }
 
-  const links = NAV.map((entry) => (isGroup(entry) ? renderGroup(entry) : renderItem(entry)));
+  const links = nav.map((entry) => (isGroup(entry) ? renderGroup(entry) : renderItem(entry)));
 
   return (
     <>

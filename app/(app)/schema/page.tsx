@@ -6,8 +6,10 @@ import { computeMatchTimes } from "@/lib/schedule";
 import { formatDateShort } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { CarpoolDuty, Club, Match, Player, WashDuty } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 export default function SchemaPage() {
+  const canEdit = useCanEdit();
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -85,6 +87,7 @@ export default function SchemaPage() {
         subtitle="Automatisch eerlijk verdeeld over het seizoen. Pas individuele beurten aan via de dropdowns."
       />
 
+      {canEdit && (
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Button onClick={generate} disabled={busy || matches.length === 0 || activePlayers.length === 0}>
           {busy ? "Bezig…" : wash.length > 0 ? "Opnieuw genereren" : "Genereer schema"}
@@ -92,6 +95,7 @@ export default function SchemaPage() {
         {matches.length === 0 && <span className="text-sm text-amber-600">Importeer eerst het programma.</span>}
         {activePlayers.length === 0 && <span className="text-sm text-amber-600">Importeer eerst de spelerslijst.</span>}
       </div>
+      )}
       <Message text={msg} error={err} />
 
       {wash.length > 0 && (
@@ -131,6 +135,7 @@ export default function SchemaPage() {
                         {w && (
                           <select
                             className={inputCls}
+                            disabled={!canEdit}
                             value={w.player_id}
                             onChange={(e) => changeWash(w, e.target.value)}
                           >
@@ -145,6 +150,7 @@ export default function SchemaPage() {
                               <select
                                 key={d.id}
                                 className={inputCls}
+                                disabled={!canEdit}
                                 value={d.player_id}
                                 onChange={(e) => changeCarpool(d, e.target.value)}
                               >

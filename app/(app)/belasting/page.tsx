@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { isoWeek, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { Absence, LoadEntry, Match, Message as ChatMessage, Player, ScheduleItem } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type LoadDraft = {
   minutes: string;
@@ -38,6 +39,7 @@ function addDaysIso(iso: string, days: number): string {
 }
 
 export default function BelastingPage() {
+  const canEdit = useCanEdit();
   const [players, setPlayers] = useState<Player[]>([]);
   const [entries, setEntries] = useState<LoadEntry[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -406,6 +408,7 @@ export default function BelastingPage() {
         </Card>
       )}
 
+      {canEdit && (
       <Card className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Sessie invoeren (staf)</h2>
@@ -505,6 +508,7 @@ export default function BelastingPage() {
         </div>
         <Message text={msg} error={err} />
       </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 font-semibold">Belastingtrend per speler</h2>
@@ -627,9 +631,11 @@ export default function BelastingPage() {
                       </>
                     )}
                     <td className={tdCls}>
-                      <button className="text-xs text-red-500 hover:underline" onClick={() => removeEntry(e)}>
-                        verwijderen
-                      </button>
+                      {canEdit && (
+                        <button className="text-xs text-red-500 hover:underline" onClick={() => removeEntry(e)}>
+                          verwijderen
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -639,6 +645,7 @@ export default function BelastingPage() {
         )}
       </Card>
 
+      {canEdit && (
       <Card className="mt-6">
         <h2 className="mb-1 font-semibold">Berichten met spelers 💬</h2>
         <p className="mb-3 text-xs text-slate-500">
@@ -691,6 +698,7 @@ export default function BelastingPage() {
           </>
         )}
       </Card>
+      )}
     </div>
   );
 }

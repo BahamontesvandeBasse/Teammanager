@@ -17,6 +17,7 @@ import {
   ExercisePhase,
   ExerciseSource,
 } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function sourceBadgeColor(source: ExerciseSource): "slate" | "green" | "amber" | "blue" {
   if (source === "ai") return "green";
@@ -34,6 +35,7 @@ export default function OefeningenPage() {
 }
 
 function OefeningenPageInner() {
+  const canEdit = useCanEdit();
   const searchParams = useSearchParams();
   const initialPhase = searchParams.get("phase") as ExercisePhase | null;
 
@@ -202,6 +204,7 @@ function OefeningenPageInner() {
         ))}
       </div>
 
+      {canEdit && (
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">{editingId ? "Oefening bewerken" : "Nieuwe oefening"}</h2>
         <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
@@ -305,6 +308,7 @@ function OefeningenPageInner() {
           </div>
         </div>
       </Card>
+      )}
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -359,6 +363,7 @@ function OefeningenPageInner() {
                       ))}
                     </div>
                   )}
+                  {canEdit && (
                   <div className="mt-2 flex gap-3">
                     <button className="text-xs font-medium text-rose-600 hover:underline" onClick={() => startEdit(ex)}>
                       bewerken
@@ -367,6 +372,7 @@ function OefeningenPageInner() {
                       verwijderen
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             ))}

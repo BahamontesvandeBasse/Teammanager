@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { formatDateShort } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { IndividualTraining, Player } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 import {
   CATEGORY_ORDER,
   TRAINING_CATEGORY_ICON,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/trainingTemplates";
 
 export default function IndividueelPage() {
+  const canEdit = useCanEdit();
   const [players, setPlayers] = useState<Player[]>([]);
   const [trainings, setTrainings] = useState<IndividualTraining[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,6 +108,7 @@ export default function IndividueelPage() {
       />
 
       <div ref={formRef} />
+      {canEdit && (
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">Nieuwe opdracht</h2>
         <div className="grid gap-3 md:grid-cols-2">
@@ -138,7 +141,9 @@ export default function IndividueelPage() {
         </div>
         <Message text={msg} error={err} />
       </Card>
+      )}
 
+      {canEdit && (
       <Card className="mb-6">
         <h2 className="mb-1 font-semibold">Extra trainingen</h2>
         <p className="mb-4 text-xs text-slate-500">
@@ -171,6 +176,7 @@ export default function IndividueelPage() {
           ))}
         </div>
       </Card>
+      )}
 
       <Card>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -216,6 +222,7 @@ export default function IndividueelPage() {
                   <div className={`mt-1 text-sm ${t.status === "voltooid" ? "line-through" : ""}`}>{t.title}</div>
                   {t.description && <div className="mt-0.5 text-xs text-slate-500">{t.description}</div>}
                 </div>
+                {canEdit && (
                 <div className="flex shrink-0 items-center gap-3">
                   <Button variant="secondary" onClick={() => toggleStatus(t)}>
                     {t.status === "open" ? "✓ Voltooid" : "Heropen"}
@@ -224,6 +231,7 @@ export default function IndividueelPage() {
                     verwijderen
                   </button>
                 </div>
+                )}
               </div>
             ))}
           </div>

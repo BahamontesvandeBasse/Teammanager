@@ -18,8 +18,10 @@ import {
   TrainingPhase,
   TrainingSession,
 } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 export default function TrainingSessionPage({ params }: { params: Promise<{ id: string }> }) {
+  const canEdit = useCanEdit();
   const { id } = use(params);
 
   const [item, setItem] = useState<ScheduleItem | null>(null);
@@ -132,13 +134,16 @@ export default function TrainingSessionPage({ params }: { params: Promise<{ id: 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Badge color="green">⏱ {totalMinutes(phases)} min totaal</Badge>
         <Badge>{phases.length} onderdeel{phases.length === 1 ? "" : "en"}</Badge>
+        {canEdit && (
         <div className="ml-auto flex gap-2">
           <Button onClick={save} disabled={!dirty}>{dirty ? "Opslaan" : "Opgeslagen ✓"}</Button>
         </div>
+        )}
       </div>
 
       <Message text={msg} error={err} />
 
+      <fieldset disabled={!canEdit} className="contents">
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">Oefening toevoegen uit de bank</h2>
         <div className="flex flex-wrap items-end gap-3">
@@ -293,6 +298,7 @@ export default function TrainingSessionPage({ params }: { params: Promise<{ id: 
         </button>
         <Button onClick={save} disabled={!dirty}>{dirty ? "Opslaan" : "Opgeslagen ✓"}</Button>
       </div>
+      </fieldset>
     </div>
   );
 }

@@ -5,8 +5,10 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button, Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { WarmingUp } from "@/lib/types";
+import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 export default function WarmingUpsPage() {
+  const canEdit = useCanEdit();
   const [warmups, setWarmups] = useState<WarmingUp[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -77,6 +79,7 @@ export default function WarmingUpsPage() {
         subtitle="Bibliotheek met warming-up routines. Kies er per wedstrijd één bij de wedstrijdvoorbereiding."
       />
 
+      {canEdit && (
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">{editingId ? "Warming-up bewerken" : "Nieuwe warming-up"}</h2>
         <div className="grid gap-3">
@@ -104,6 +107,7 @@ export default function WarmingUpsPage() {
         </div>
         <Message text={msg} error={err} />
       </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 font-semibold">
@@ -117,6 +121,7 @@ export default function WarmingUpsPage() {
               <div key={w.id} className="rounded-lg border border-slate-200 p-3">
                 <div className="font-medium">{w.name}</div>
                 {w.description && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">{w.description}</p>}
+                {canEdit && (
                 <div className="mt-2 flex gap-3">
                   <button className="text-xs font-medium text-rose-600 hover:underline" onClick={() => startEdit(w)}>
                     bewerken
@@ -125,6 +130,7 @@ export default function WarmingUpsPage() {
                     verwijderen
                   </button>
                 </div>
+                )}
               </div>
             ))}
           </div>
