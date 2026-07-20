@@ -1,6 +1,17 @@
--- Teammanager schema — uitvoeren in de Supabase SQL editor (of via supabase db push).
+-- Teammanager schema — uitvoeren tegen de Neon-database (bv. via de Neon SQL
+-- Editor in het dashboard, of psql/een migratietool naar keuze).
 
 create extension if not exists "pgcrypto";
+
+-- Trainers-/begeleidingsaccounts (eigen e-mail/wachtwoord-login via Auth.js,
+-- geen open registratie — accounts worden aangemaakt via scripts/create-user.mjs).
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text not null,
+  name text not null,
+  created_at timestamptz not null default now()
+);
 
 create table if not exists players (
   id uuid primary key default gen_random_uuid(),
@@ -19,7 +30,8 @@ create table if not exists staff (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   role text,
-  contact text
+  contact text,
+  birthdate date
 );
 
 create table if not exists clubs (
@@ -67,7 +79,11 @@ create table if not exists absences (
   "from" date not null,
   until date not null,
   reason text,
-  check ((player_id is not null) <> (staff_id is not null))
+  constraint absences_exactly_one_person check (
+    (player_id is not null and staff_id is null) or
+    (player_id is null and staff_id is not null)
+  ),
+  constraint absences_valid_range check (until >= "from")
 );
 
 create table if not exists wash_duty (
@@ -89,6 +105,7 @@ create table if not exists match_stats (
   goals int not null default 0,
   assists int not null default 0,
   minutes_played int not null default 0,
+  rating int check (rating between 1 and 10),
   unique (match_id, player_id)
 );
 
@@ -101,8 +118,8 @@ create table if not exists load_entries (
   minutes int,
   rpe int check (rpe between 1 and 10),
   notes text,
-  fatigue int check (fatigue between 1 and 5),
-  soreness int check (soreness between 1 and 5),
+  fatigue int check (fatigue between 1 and 10),
+  soreness int check (soreness between 1 and 10),
   injury_flag boolean not null default false,
   reported_by text not null default 'staff' check (reported_by in ('staff', 'player'))
 );
@@ -129,21 +146,43 @@ create table if not exists individual_trainings (
   created_by text not null default 'staff' check (created_by in ('staff', 'player'))
 );
 
+-- Herbruikbare warming-up routines, te kiezen bij de wedstrijdvoorbereiding.
+create table if not exists warmups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text
+);
+
 -- Wedstrijdvoorbereiding: opstelling, tactische notities en standaardsituaties (1 per wedstrijd).
 create table if not exists match_preparations (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null unique references matches(id) on delete cascade,
   formation text,
+  warmup_id uuid references warmups(id) on delete set null,
   lineup jsonb not null default '[]'::jsonb,
   substitutes jsonb not null default '[]'::jsonb,
-  tactical_notes jsonb,
+  tactical_notes jsonb not null default '{}'::jsonb,
   corners_notes text,
   freekicks_notes text,
   throwins_notes text,
   drawings jsonb not null default '{}'::jsonb
 );
 
--- Fase 2 (video-analyse) alvast klaargezet:
+-- Oefeningenbank: herbruikbare oefeningen per trainingsfase.
+create table if not exists exercises (
+  id uuid primary key default gen_random_uuid(),
+  phase text not null check (phase in ('warming_up', 'orientatie', 'oefenleerfase', 'toepassingsfase', 'tussenvorm')),
+  subcategory text not null,
+  title text not null,
+  description text not null default '',
+  duration_minutes int not null default 10,
+  source text not null default 'handmatig' check (source in ('handmatig', 'ai', 'rinus', 'feeton')),
+  tags jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  drawing jsonb not null default '[]'::jsonb
+);
+
+-- Fase 2 (video-analyse):
 create table if not exists video_links (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null references matches(id) on delete cascade,
@@ -161,14 +200,14 @@ create table if not exists video_notes (
   note text not null
 );
 
--- RLS: alleen ingelogde gebruikers (trainers/begeleiding) mogen alles lezen/schrijven.
-do $$
-declare t text;
-begin
-  foreach t in array array['players','staff','clubs','matches','wash_duty','carpool_duty','match_stats','load_entries','individual_trainings','messages','match_preparations','video_links','video_notes','schedule_items','training_sessions','absences']
-  loop
-    execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists "authenticated full access" on %I', t);
-    execute format('create policy "authenticated full access" on %I for all to authenticated using (true) with check (true)', t);
-  end loop;
-end $$;
+-- Idempotente patch: vult kolommen aan op tabellen die mogelijk al bestonden
+-- van een eerdere (onvolledige) versie van dit schema. Veilig om altijd mee te draaien.
+alter table match_stats add column if not exists rating int check (rating between 1 and 10);
+alter table staff add column if not exists birthdate date;
+alter table match_preparations add column if not exists warmup_id uuid references warmups(id) on delete set null;
+
+-- Geen RLS-policies: alle toegang loopt via de Next.js-server met één
+-- vertrouwde databaseverbinding (connection string, nooit blootgesteld aan de
+-- browser). Toegangscontrole (staf moet ingelogd zijn, spelers alleen via hun
+-- eigen token) wordt afgedwongen in de applicatiecode (proxy.ts / API-routes),
+-- niet door de database.

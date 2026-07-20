@@ -32,7 +32,7 @@ Deel het linkje gewoon als tekst via de bestaande teams-WhatsAppgroep of 1-op-1 
 
 ## Lokaal draaien
 
-De app werkt direct **zonder Supabase** (lokale modus): data wordt opgeslagen in `data/db.json` en er is geen login.
+De app werkt direct **zonder database** (lokale modus): data wordt opgeslagen in `data/db.json` en er is geen login.
 
 ```bash
 npm install
@@ -43,28 +43,32 @@ Open daarna http://localhost:3000.
 
 > Node.js staat op deze machine als portable versie in `%LOCALAPPDATA%\nodejs-portable\node-v22.21.1-win-x64`. Voeg die map toe aan je PATH of gebruik het volledige pad naar `npm.cmd`.
 
-## Online zetten (Supabase + Vercel)
+## Online zetten (Neon + Vercel)
 
 Nog te doen door de beheerder — daarna verzorgt Claude de koppeling:
 
-1. **Supabase-project aanmaken** (gratis): https://supabase.com → New project.
-2. In het Supabase-dashboard → **SQL Editor** → voer de inhoud van `supabase/migrations/001_schema.sql` uit.
-3. **Auth-instellingen**: Authentication → Sign In / Up → zet "Allow new users to sign up" **uit** (accounts alleen via de beheerder). Maak accounts aan via Authentication → Users → "Add user" (e-mail + wachtwoord) voor elke trainer/begeleider.
-4. Kopieer `.env.local.example` naar `.env.local` en vul in (Settings → API):
-   - `NEXT_PUBLIC_SUPABASE_URL` — de Project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — de `anon` / `publishable` key
-   - `SUPABASE_SERVICE_ROLE_KEY` — nodig voor het mobiele spelersscherm (spelers loggen niet in); geheim houden
+1. **Neon-project aanmaken** (gratis): https://console.neon.tech → New project.
+2. In het Neon-dashboard → **SQL Editor** → voer de inhoud van `db/migrations/001_schema.sql` uit.
+3. Kopieer `.env.local.example` naar `.env.local` en vul in:
+   - `DATABASE_URL` — Connect → "pooled connection" string (inclusief wachtwoord); geheim houden
+   - `AUTH_SECRET` — willekeurige waarde, zie het commentaar in `.env.local.example` voor het genereer-commando; geheim houden
+4. **Trainersaccounts aanmaken** (geen registratiepagina — alleen via dit script, één keer per trainer/begeleider):
+   ```bash
+   node scripts/create-user.mjs
+   ```
+   Vraagt interactief om e-mailadres, naam en wachtwoord.
 5. **Vercel** (gratis): https://vercel.com → project importeren vanuit een GitHub-repo met deze code, en dezelfde twee env-variabelen instellen bij Settings → Environment Variables.
 
-Zodra de env-variabelen zijn ingevuld schakelt de app automatisch over van lokale modus naar Supabase, en is de login actief.
+Zodra de env-variabelen zijn ingevuld schakelt de app automatisch over van lokale modus naar Neon, en is de login actief.
 
-**Let op (lokale modus):** `data/db.json` is niet gedeeld — die staat alleen op deze computer. Gedeeld werken met meerdere trainers werkt pas na de Supabase-koppeling.
+**Let op (lokale modus):** `data/db.json` is niet gedeeld — die staat alleen op deze computer. Gedeeld werken met meerdere trainers werkt pas na de Neon-koppeling. Lokale data overzetten naar Neon: `node scripts/migrate-to-neon.mjs` (zie hieronder).
 
 ## Structuur
 
 - `lib/schedule.ts` — rotatie-algoritme (was/rijden) en tijdberekeningen
 - `lib/parse.ts` — flexibele Excel/tekst-parsers voor spelers en programma
-- `lib/db/` — datalaag: Supabase óf lokale JSON-store (automatische keuze op basis van env)
-- `supabase/migrations/001_schema.sql` — databaseschema incl. RLS (alleen ingelogde gebruikers)
+- `lib/db/` — datalaag: Neon óf lokale JSON-store (automatische keuze op basis van `DATABASE_URL`)
+- `lib/auth.ts`, `lib/auth/` — eigen e-mail/wachtwoord-login (Auth.js) voor trainers/begeleiding
+- `db/migrations/001_schema.sql` — databaseschema (incl. `users`-tabel voor login)
 - `app/(app)/…` — de pagina's; `app/api/…` — CRUD- en generatie-endpoints
 - Fase 2 (nog niet gebouwd): video-analyse met VEO-links — tabellen staan al klaar in het schema.

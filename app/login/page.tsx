@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 import { Button, Card, Message, inputCls } from "@/components/ui";
 
 export default function LoginPage() {
@@ -17,9 +17,8 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) {
         setError("Inloggen mislukt: controleer e-mailadres en wachtwoord.");
         return;
       }
@@ -61,7 +60,7 @@ export default function LoginPage() {
         </form>
         <Message text={error} error />
         <p className="mt-4 text-center text-xs text-slate-400">
-          Accounts worden aangemaakt door de beheerder (via Supabase).
+          Accounts worden aangemaakt door de beheerder.
         </p>
       </Card>
     </div>

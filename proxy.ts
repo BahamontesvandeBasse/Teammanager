@@ -1,59 +1,42 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { neonConfigured } from "@/lib/db/neonClient";
 
-// Auth-guard: alleen actief wanneer Supabase is geconfigureerd.
-// Zonder Supabase draait de app in lokale modus zonder login.
+// Auth-guard: alleen actief wanneer Neon is geconfigureerd.
+// Zonder Neon draait de app in lokale modus zonder login.
 
 // Spelers loggen niet in — deze paden gebruiken een token en moeten dus
-// publiek bereikbaar blijven, ook als Supabase-login actief is.
-const PUBLIC_PREFIXES = ["/mijn", "/api/mijn"];
+// publiek bereikbaar blijven, ook als login actief is.
+const PUBLIC_PREFIXES = ["/mijn", "/api/mijn", "/api/auth"];
 
-export async function proxy(request: NextRequest) {
-  if (PUBLIC_PREFIXES.some((p) => request.nextUrl.pathname.startsWith(p))) {
+export default auth((request) => {
+  const pathname = request.nextUrl.pathname;
+
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return NextResponse.next();
+  if (!neonConfigured()) {
+    return NextResponse.next();
+  }
 
-  let response = NextResponse.next({ request });
+  const isLoggedIn = Boolean(request.auth);
+  const isLoginPage = pathname.startsWith("/login");
 
-  const supabase = createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isLoginPage = request.nextUrl.pathname.startsWith("/login");
-
-  if (!user && !isLoginPage) {
+  if (!isLoggedIn && !isLoginPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && isLoginPage) {
+  if (isLoggedIn && isLoginPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/";
     return NextResponse.redirect(redirectUrl);
   }
 
-  return response;
-}
+  return NextResponse.next();
+});
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],

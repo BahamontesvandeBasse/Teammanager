@@ -3,7 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { EntityName, ENTITIES } from "@/lib/types";
 
-// Simpele JSON-file store voor lokaal gebruik zonder Supabase.
+// Simpele JSON-file store voor lokaal gebruik zonder database.
 // Data staat in <projectroot>/data/db.json (gitignored).
 
 const DATA_DIR = path.join(process.cwd(), "data");

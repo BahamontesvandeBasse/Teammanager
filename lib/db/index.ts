@@ -1,10 +1,10 @@
 import { EntityName, ENTITIES } from "@/lib/types";
 import { localStore } from "@/lib/db/local";
-import { createSupabaseServerClient, supabaseConfigured } from "@/lib/supabase/server";
-import { adminConfigured, createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { neonStore } from "@/lib/db/neon";
+import { neonConfigured } from "@/lib/db/neonClient";
 
-// Datalaag: gebruikt Supabase zodra de env-variabelen zijn ingevuld,
-// anders een lokale JSON-store zodat de app direct lokaal werkt.
+// Datalaag: gebruikt Neon zodra DATABASE_URL is ingevuld, anders een lokale
+// JSON-store zodat de app direct lokaal werkt zonder database.
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -20,78 +20,18 @@ export interface DataStore {
   clear(entity: EntityName): Promise<void>;
 }
 
-function supabaseStore(): DataStore {
-  return {
-    async list(entity) {
-      const sb = await createSupabaseServerClient();
-      const { data, error } = await sb.from(entity).select("*");
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Row[];
-    },
-    async insert(entity, rows) {
-      const sb = await createSupabaseServerClient();
-      const { data, error } = await sb.from(entity).insert(rows).select();
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Row[];
-    },
-    async update(entity, id, patch) {
-      const sb = await createSupabaseServerClient();
-      const { data, error } = await sb.from(entity).update(patch).eq("id", id).select();
-      if (error) throw new Error(error.message);
-      return ((data ?? [])[0] as Row) ?? null;
-    },
-    async remove(entity, id) {
-      const sb = await createSupabaseServerClient();
-      const { error } = await sb.from(entity).delete().eq("id", id);
-      if (error) throw new Error(error.message);
-    },
-    async clear(entity) {
-      const sb = await createSupabaseServerClient();
-      const { error } = await sb.from(entity).delete().not("id", "is", null);
-      if (error) throw new Error(error.message);
-    },
-  };
-}
-
 export function getStore(): DataStore {
-  return supabaseConfigured() ? supabaseStore() : localStore;
-}
-
-function supabaseAdminStoreImpl(): DataStore {
-  const sb = createSupabaseAdminClient();
-  return {
-    async list(entity) {
-      const { data, error } = await sb.from(entity).select("*");
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Row[];
-    },
-    async insert(entity, rows) {
-      const { data, error } = await sb.from(entity).insert(rows).select();
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Row[];
-    },
-    async update(entity, id, patch) {
-      const { data, error } = await sb.from(entity).update(patch).eq("id", id).select();
-      if (error) throw new Error(error.message);
-      return ((data ?? [])[0] as Row) ?? null;
-    },
-    async remove(entity, id) {
-      const { error } = await sb.from(entity).delete().eq("id", id);
-      if (error) throw new Error(error.message);
-    },
-    async clear(entity) {
-      const { error } = await sb.from(entity).delete().not("id", "is", null);
-      if (error) throw new Error(error.message);
-    },
-  };
+  return neonConfigured() ? neonStore : localStore;
 }
 
 /**
  * Datalaag voor routes zonder staf-login (spelers gebruiken een token, geen
- * Supabase-sessie). Gebruikt de service-role key zodra die is ingevuld
- * (omzeilt RLS bewust, na expliciete tokenvalidatie in de route zelf);
- * anders dezelfde lokale JSON-store als getStore().
+ * ingelogde sessie). Neon heeft geen RLS-laag zoals Supabase had — alle
+ * toegang loopt via dezelfde vertrouwde serververbinding, dus dit is gewoon
+ * dezelfde store als getStore(). Blijft een aparte functie zodat routes die
+ * hem gebruiken expliciet blijven aangeven dat ze zelf verantwoordelijk zijn
+ * voor het valideren van het spelerstoken vóór ze de store aanspreken.
  */
 export function getAdminStore(): DataStore {
-  return adminConfigured() ? supabaseAdminStoreImpl() : localStore;
+  return getStore();
 }
