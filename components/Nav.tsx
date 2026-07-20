@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { isAdmin, Role } from "@/lib/auth/roles";
 
 type NavItem = { href: string; label: string; icon: string };
@@ -44,7 +45,7 @@ function groupContainsActive(group: NavGroup, pathname: string): boolean {
   return group.items.some((i) => isActiveHref(pathname, i.href));
 }
 
-export default function Nav({ role }: { role: Role }) {
+export default function Nav({ role, loginActive }: { role: Role; loginActive: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // Alleen expliciete gebruikersacties (klik op een groep) — automatisch openklappen
@@ -107,6 +108,16 @@ export default function Nav({ role }: { role: Role }) {
 
   const links = nav.map((entry) => (isGroup(entry) ? renderGroup(entry) : renderItem(entry)));
 
+  const logoutButton = loginActive && (
+    <button
+      onClick={() => signOut({ callbackUrl: "/login" })}
+      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-white"
+    >
+      <span aria-hidden>🚪</span>
+      Uitloggen
+    </button>
+  );
+
   return (
     <>
       {/* Mobiel: topbar */}
@@ -121,7 +132,10 @@ export default function Nav({ role }: { role: Role }) {
         </button>
       </header>
       {open && (
-        <nav className="md:hidden bg-black px-4 pb-4 flex flex-col gap-1">{links}</nav>
+        <nav className="md:hidden bg-black px-4 pb-4 flex flex-col gap-1">
+          {links}
+          {logoutButton}
+        </nav>
       )}
 
       {/* Desktop: sidebar */}
@@ -131,6 +145,7 @@ export default function Nav({ role }: { role: Role }) {
           <div className="text-xs text-neutral-400">Sv Steenwijkerwold 19-1</div>
         </div>
         {links}
+        {logoutButton && <div className="mt-2 border-t border-neutral-800 pt-2">{logoutButton}</div>}
       </aside>
     </>
   );
