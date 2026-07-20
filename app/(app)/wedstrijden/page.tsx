@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -96,6 +96,14 @@ function trimTacticalNotes(notes: TacticalNotes): TacticalNotes {
 }
 
 export default function WedstrijdenPage() {
+  return (
+    <Suspense fallback={<p className="text-slate-500">Laden…</p>}>
+      <WedstrijdenPageInner />
+    </Suspense>
+  );
+}
+
+function WedstrijdenPageInner() {
   const searchParams = useSearchParams();
   const preselectMatch = searchParams.get("match");
 

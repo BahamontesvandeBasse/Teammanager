@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { formatDate, formatDateShort } from "@/lib/format";
@@ -38,6 +38,14 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
 }
 
 export default function ResultatenPage() {
+  return (
+    <Suspense fallback={<p className="text-slate-500">Laden…</p>}>
+      <ResultatenPageInner />
+    </Suspense>
+  );
+}
+
+function ResultatenPageInner() {
   const searchParams = useSearchParams();
   const preselectMatch = searchParams.get("match");
 

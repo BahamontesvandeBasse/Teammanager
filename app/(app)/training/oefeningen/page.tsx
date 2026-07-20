@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -26,6 +26,14 @@ function sourceBadgeColor(source: ExerciseSource): "slate" | "green" | "amber" |
 }
 
 export default function OefeningenPage() {
+  return (
+    <Suspense fallback={<p className="text-slate-500">Laden…</p>}>
+      <OefeningenPageInner />
+    </Suspense>
+  );
+}
+
+function OefeningenPageInner() {
   const searchParams = useSearchParams();
   const initialPhase = searchParams.get("phase") as ExercisePhase | null;
 
