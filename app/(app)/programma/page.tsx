@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { ParsedMatch, parseMatchesFile, parseMatchesText } from "@/lib/parse";
@@ -40,6 +40,39 @@ function splitByDate<T>(list: T[], dateOf: (t: T) => string, today: string): { u
   return { upcoming, past };
 }
 
+// Compacte, inklapbare kaart voor beheertools (import/toevoegen) — dicht
+// standaard, zodat de aandacht naar het programma zelf gaat in plaats van
+// naar de invoervelden.
+function CollapsibleCard({
+  title,
+  subtitle,
+  defaultOpen = false,
+  className,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card className={className}>
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between gap-2 text-left">
+        <div>
+          <h2 className="font-semibold">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+        </div>
+        <span className={`text-slate-400 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
+          ›
+        </span>
+      </button>
+      {open && <div className="mt-4">{children}</div>}
+    </Card>
+  );
+}
+
 export default function ProgrammaPage() {
   const canEdit = useCanEdit();
   const [tab, setTab] = useState<Tab>("wedstrijden");
@@ -74,6 +107,7 @@ export default function ProgrammaPage() {
   const [newTravel, setNewTravel] = useState("");
   const [newNotes, setNewNotes] = useState("");
 
+  const [absFormOpen, setAbsFormOpen] = useState(false);
   const [absPerson, setAbsPerson] = useState(""); // "player:<id>" of "staff:<id>"
   const [absFrom, setAbsFrom] = useState("");
   const [absUntil, setAbsUntil] = useState("");
@@ -329,6 +363,7 @@ export default function ProgrammaPage() {
       setAbsFrom("");
       setAbsUntil("");
       setAbsReason("");
+      setAbsFormOpen(false);
       await reload();
       flash("Afwezigheid toegevoegd.");
     } catch (e) {
@@ -346,6 +381,7 @@ export default function ProgrammaPage() {
   const today = todayIso();
   const awayOpponents = new Set(matches.filter((m) => m.home_away === "away").map((m) => m.opponent.toLowerCase()));
   const relevantClubs = clubs.filter((c) => awayOpponents.has(c.name.toLowerCase()));
+  const hasMissingTravel = relevantClubs.some((c) => c.travel_time_minutes == null);
   const { upcoming: upcomingMatches, past: pastMatches } = splitByDate(matches, (m) => m.date, today);
   const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(agendaRows, (r) => r.date, today);
 
@@ -630,71 +666,73 @@ export default function ProgrammaPage() {
         <>
           {canEdit && (
           <>
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <h2 className="mb-3 font-semibold">Plakken vanaf voetbal.nl</h2>
-              <textarea
-                className={`${inputCls} h-40 w-full font-mono text-xs`}
-                placeholder={"Selecteer het programma op voetbal.nl, kopieer het en plak het hier.\nBijv.:\nza 6 sep 2025 14:30\nSteenwijkerwold JO19-1 - FC Wolvega JO19-1"}
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-              />
-              <div className="mt-3">
-                <Button onClick={handlePaste} disabled={!pasteText.trim()}>Tekst verwerken</Button>
+          <CollapsibleCard title="Wedstrijd toevoegen of importeren" subtitle="Plakken vanaf voetbal.nl, Excel/CSV-upload of handmatig">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Plakken vanaf voetbal.nl</h3>
+                <textarea
+                  className={`${inputCls} h-40 w-full font-mono text-xs`}
+                  placeholder={"Selecteer het programma op voetbal.nl, kopieer het en plak het hier.\nBijv.:\nza 6 sep 2025 14:30\nSteenwijkerwold JO19-1 - FC Wolvega JO19-1"}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                />
+                <div className="mt-3">
+                  <Button onClick={handlePaste} disabled={!pasteText.trim()}>Tekst verwerken</Button>
+                </div>
               </div>
-            </Card>
 
-            <Card>
-              <h2 className="mb-3 font-semibold">Of upload Excel/CSV</h2>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                className="text-sm"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFile(f);
-                }}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                Kolommen worden automatisch herkend: datum, tijd, en “wedstrijd” (Team A - Team B) of aparte thuis/uit-kolommen.
-                Thuis of uit wordt bepaald aan de hand van de teamnaam (Steenwijkerwold).
-              </p>
-            </Card>
-          </div>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Of upload Excel/CSV</h3>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="text-sm"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFile(f);
+                  }}
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  Kolommen worden automatisch herkend: datum, tijd, en “wedstrijd” (Team A - Team B) of aparte thuis/uit-kolommen.
+                  Thuis of uit wordt bepaald aan de hand van de teamnaam (Steenwijkerwold).
+                </p>
+              </div>
+            </div>
 
-          <Card className="mt-6">
-            <h2 className="mb-3 font-semibold">Eén wedstrijd handmatig toevoegen</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <input type="date" className={inputCls} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-              <input type="time" className={inputCls} value={newKickoff} onChange={(e) => setNewKickoff(e.target.value)} />
-              <input
-                type="text"
-                className={inputCls}
-                placeholder="Tegenstander"
-                value={newOpponent}
-                onChange={(e) => setNewOpponent(e.target.value)}
-              />
-              <select
-                className={inputCls}
-                value={newHomeAway}
-                onChange={(e) => setNewHomeAway(e.target.value as "home" | "away")}
-              >
-                <option value="home">Thuis</option>
-                <option value="away">Uit</option>
-              </select>
-              <input
-                type="text"
-                className={inputCls}
-                placeholder="Competitie (optioneel)"
-                value={newCompetition}
-                onChange={(e) => setNewCompetition(e.target.value)}
-              />
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <h3 className="mb-2 text-sm font-semibold">Eén wedstrijd handmatig toevoegen</h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <input type="date" className={inputCls} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+                <input type="time" className={inputCls} value={newKickoff} onChange={(e) => setNewKickoff(e.target.value)} />
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Tegenstander"
+                  value={newOpponent}
+                  onChange={(e) => setNewOpponent(e.target.value)}
+                />
+                <select
+                  className={inputCls}
+                  value={newHomeAway}
+                  onChange={(e) => setNewHomeAway(e.target.value as "home" | "away")}
+                >
+                  <option value="home">Thuis</option>
+                  <option value="away">Uit</option>
+                </select>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Competitie (optioneel)"
+                  value={newCompetition}
+                  onChange={(e) => setNewCompetition(e.target.value)}
+                />
+              </div>
+              <div className="mt-3">
+                <Button onClick={addMatch}>Toevoegen</Button>
+              </div>
             </div>
-            <div className="mt-3">
-              <Button onClick={addMatch}>Toevoegen</Button>
-            </div>
-          </Card>
+          </CollapsibleCard>
 
           {preview && (
             <Card className="mt-6 border-amber-200">
@@ -742,9 +780,13 @@ export default function ProgrammaPage() {
           )}
 
           {canEdit && relevantClubs.length > 0 && (
-            <Card className="mt-6">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <h2 className="font-semibold">Reistijden uitwedstrijden 🚗</h2>
+            <CollapsibleCard
+              title="Reistijden uitwedstrijden 🚗"
+              subtitle={hasMissingTravel ? "Nog niet voor alle clubs ingevuld" : "Voor alle clubs ingevuld"}
+              defaultOpen={hasMissingTravel}
+              className="mt-6"
+            >
+              <div className="mb-3 flex items-center justify-end">
                 <Button variant="secondary" onClick={fetchAllTravelTimes} disabled={fetchAllBusy}>
                   {fetchAllBusy ? "Ophalen…" : "Alles ophalen via Google Maps"}
                 </Button>
@@ -791,7 +833,7 @@ export default function ProgrammaPage() {
                   </div>
                 ))}
               </div>
-            </Card>
+            </CollapsibleCard>
           )}
 
           <Card className="mt-6">
@@ -813,8 +855,10 @@ export default function ProgrammaPage() {
       {tab === "agenda" && (
         <>
           {canEdit && (
-          <Card>
-            <h2 className="mb-3 font-semibold">Training of toernooi toevoegen</h2>
+          <CollapsibleCard
+            title="Training of toernooi toevoegen"
+            subtitle="Voor wedstrijden: gebruik het tabblad Wedstrijden"
+          >
             <p className="mb-3 text-xs text-slate-500">
               Voor wedstrijden: gebruik het tabblad <button className="font-medium text-emerald-600 hover:underline" onClick={() => setTab("wedstrijden")}>Wedstrijden</button> — ze verschijnen dan automatisch hieronder.
             </p>
@@ -865,16 +909,26 @@ export default function ProgrammaPage() {
               />
               <Button onClick={addItem}>Toevoegen</Button>
             </div>
-          </Card>
+          </CollapsibleCard>
           )}
 
           <Card className="mt-6">
-            <h2 className="mb-1 font-semibold">Afwezigheid beheren</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold">Afwezigheid beheren</h2>
+              {canEdit && (
+                <button
+                  onClick={() => setAbsFormOpen(!absFormOpen)}
+                  className="text-xs font-medium text-emerald-600 hover:underline"
+                >
+                  {absFormOpen ? "Sluiten" : "+ Toevoegen"}
+                </button>
+              )}
+            </div>
             <p className="mb-3 text-xs text-slate-500">
               Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
             </p>
-            {canEdit && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {canEdit && absFormOpen && (
+            <div className="mb-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)}>
                 <option value="">— Kies speler/staflid —</option>
                 <optgroup label="Spelers">
