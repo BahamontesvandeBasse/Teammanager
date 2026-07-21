@@ -1,8 +1,9 @@
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { neonConfigured } from "@/lib/db/neonClient";
 import { getStore } from "@/lib/db";
 import { EntityName } from "@/lib/types";
-import { canEdit, Role } from "@/lib/auth/roles";
+import { canEdit, Role, ROLES } from "@/lib/auth/roles";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -10,17 +11,39 @@ export function canWriteEntity(role: Role): boolean {
   return canEdit(role);
 }
 
+export const VIEW_AS_COOKIE = "view_as";
+
 /**
- * Bepaalt de rol van de huidige request. In lokale modus (geen Neon, dus
- * geen login) is er geen sessie — dan gedraagt de app zich zoals voorheen
- * (volledige toegang). Zodra Neon actief is loopt elke server-toegang via
- * proxy.ts, dus is er altijd een sessie; "toeschouwer" is de veilige
- * fallback als die er onverwacht toch niet is.
+ * De echte rol van de ingelogde gebruiker (session), zonder rekening te
+ * houden met "bekijk als"-modus. Gebruik dit voor alles wat altijd bij het
+ * eigen account moet horen: beheerdersfuncties (gebruikersbeheer) en de
+ * "bekijk als"-schakelaar zelf — anders zou een beheerder die zichzelf als
+ * speler laat weergeven, zichzelf buitensluiten van die schakelaar.
  */
-export async function resolveRole(): Promise<Role> {
+export async function getRealRole(): Promise<Role> {
   if (!neonConfigured()) return "admin";
   const session = await auth();
   return (session?.user?.role as Role | undefined) ?? "toeschouwer";
+}
+
+/**
+ * Bepaalt de effectieve rol van de huidige request: de echte rol, tenzij de
+ * beheerder via de "bekijk als"-schakelaar tijdelijk een andere rol simuleert
+ * (cookie VIEW_AS_COOKIE) — zo kan de beheerder precies zien wat een staf/
+ * toeschouwer/speler-account te zien krijgt, inclusief de server-side
+ * redactie/schrijfbeveiliging hieronder, zonder in te hoeven loggen als
+ * iemand anders. Alleen mogelijk als de echte rol admin is.
+ */
+export async function resolveRole(): Promise<Role> {
+  const real = await getRealRole();
+  if (real !== "admin") return real;
+
+  const store = await cookies();
+  const viewAs = store.get(VIEW_AS_COOKIE)?.value as Role | undefined;
+  if (viewAs && viewAs !== "admin" && (ROLES as string[]).includes(viewAs)) {
+    return viewAs;
+  }
+  return real;
 }
 
 const TODAY = () => new Date().toISOString().slice(0, 10);

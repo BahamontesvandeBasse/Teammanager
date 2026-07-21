@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveRole } from "@/lib/auth/access";
+import { getRealRole } from "@/lib/auth/access";
 import { isAdmin, Role } from "@/lib/auth/roles";
 import { createUser, listUsers } from "@/lib/auth/users";
 import { hashPassword } from "@/lib/auth/passwords";
@@ -7,14 +7,14 @@ import { hashPassword } from "@/lib/auth/passwords";
 const CREATABLE_ROLES: Role[] = ["staf", "toeschouwer", "speler"];
 
 export async function GET() {
-  const role = await resolveRole();
+  const role = await getRealRole();
   if (!isAdmin(role)) return NextResponse.json({ error: "Alleen voor beheerders" }, { status: 403 });
   const users = await listUsers();
   return NextResponse.json(users);
 }
 
 export async function POST(req: NextRequest) {
-  const role = await resolveRole();
+  const role = await getRealRole();
   if (!isAdmin(role)) return NextResponse.json({ error: "Alleen voor beheerders" }, { status: 403 });
 
   try {

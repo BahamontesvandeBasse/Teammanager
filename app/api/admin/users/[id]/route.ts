@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveRole } from "@/lib/auth/access";
+import { getRealRole } from "@/lib/auth/access";
 import { isAdmin, Role } from "@/lib/auth/roles";
 import { deleteUser, getUser, updateUser, updateUserPassword } from "@/lib/auth/users";
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
@@ -9,7 +9,7 @@ const ASSIGNABLE_ROLES: Role[] = ["staf", "toeschouwer", "speler"];
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const role = await resolveRole();
+  const role = await getRealRole();
   if (!isAdmin(role)) return NextResponse.json({ error: "Alleen voor beheerders" }, { status: 403 });
 
   const { id } = await params;
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 // Genereert een nieuw tijdelijk wachtwoord en slaat alleen de bcrypt-hash op.
 // Het platte wachtwoord is hierna nergens meer op te vragen — dit endpoint is de enige plek waar het zichtbaar is.
 export async function POST(req: NextRequest, { params }: Params) {
-  const role = await resolveRole();
+  const role = await getRealRole();
   if (!isAdmin(role)) return NextResponse.json({ error: "Alleen voor beheerders" }, { status: 403 });
 
   const { id } = await params;
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const role = await resolveRole();
+  const role = await getRealRole();
   if (!isAdmin(role)) return NextResponse.json({ error: "Alleen voor beheerders" }, { status: 403 });
 
   const { id } = await params;
