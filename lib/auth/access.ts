@@ -26,16 +26,18 @@ export async function resolveRole(): Promise<Role> {
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
 /**
- * Redigeert/filtert rijen op basis van de rol van de aanvrager. Alleen de
- * rol "speler" heeft momenteel beperkingen: geen beoordelingen, en
- * wedstrijdvoorbereiding pas zichtbaar nadat de wedstrijd gespeeld is.
+ * Redigeert/filtert rijen op basis van de rol van de aanvrager:
+ * - "speler" en "toeschouwer" zien geen beoordelingen (match_stats.rating).
+ * - "speler" ziet daarnaast wedstrijdvoorbereiding pas nadat de wedstrijd is gespeeld.
  */
 export async function redactForRole(entity: EntityName, rows: Row[], role: Role): Promise<Row[]> {
-  if (role !== "speler") return rows;
+  if (role !== "speler" && role !== "toeschouwer") return rows;
 
   if (entity === "match_stats") {
     return rows.map((r) => ({ ...r, rating: null }));
   }
+
+  if (role !== "speler") return rows;
 
   if (entity === "match_preparations") {
     const matches = (await getStore().list("matches")) as Row[];
