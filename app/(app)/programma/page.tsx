@@ -64,7 +64,7 @@ function CollapsibleCard({
           <h2 className="font-semibold">{title}</h2>
           {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
-        <span className={`text-slate-400 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
+        <span className={`text-slate-500 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
           ›
         </span>
       </button>
@@ -433,7 +433,7 @@ export default function ProgrammaPage() {
                   e.target.value !== String(m.score_for ?? "") && updateScore(m, "score_for", e.target.value)
                 }
               />
-              <span className="text-slate-400">–</span>
+              <span className="text-slate-500">–</span>
               <input
                 type="number"
                 min={0}
@@ -500,7 +500,7 @@ export default function ProgrammaPage() {
     const absentNames = absentNamesForDate(row.date);
     const afwezigCell =
       absentNames.length === 0 ? (
-        <span className="text-xs text-slate-400">–</span>
+        <span className="text-xs text-slate-500">–</span>
       ) : (
         <span className="text-xs text-amber-700">{absentNames.join(", ")}</span>
       );
@@ -524,7 +524,7 @@ export default function ProgrammaPage() {
             {match.home_away === "away" ? (
               <span className="text-xs text-slate-500">{times.travelMinutes ?? "?"} min</span>
             ) : (
-              <span className="text-xs text-slate-400">–</span>
+              <span className="text-xs text-slate-500">–</span>
             )}
           </td>
           <td className={tdCls}>
@@ -598,7 +598,7 @@ export default function ProgrammaPage() {
               <span className="text-xs text-slate-500">min</span>
             </div>
           ) : (
-            <span className="text-xs text-slate-400">–</span>
+            <span className="text-xs text-slate-500">–</span>
           )}
         </td>
         <td className={tdCls}>
@@ -609,7 +609,7 @@ export default function ProgrammaPage() {
           ) : times.arrive && item.home_away === "away" ? (
             <span className="text-xs text-amber-600">vul reistijd in</span>
           ) : (
-            <span className="text-xs text-slate-400">–</span>
+            <span className="text-xs text-slate-500">–</span>
           )}
         </td>
         <td className={tdCls}>{afwezigCell}</td>

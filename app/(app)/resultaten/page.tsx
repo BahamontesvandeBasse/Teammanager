@@ -617,7 +617,7 @@ function ResultatenPageInner() {
                   <div className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
                     {currentVideo.ai_advice}
                     {currentVideo.ai_advice_generated_at && (
-                      <p className="mt-3 text-xs text-slate-400">
+                      <p className="mt-3 text-xs text-slate-500">
                         Gegenereerd op {new Date(currentVideo.ai_advice_generated_at).toLocaleString("nl-NL")}
                       </p>
                     )}

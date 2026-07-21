@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminStore } from "@/lib/db";
-import { IndividualTraining, LoadEntry, Message, Player, SetPiece } from "@/lib/types";
+import { playerAbsenceStatus } from "@/lib/absence";
+import { todayIso } from "@/lib/format";
+import { Absence, IndividualTraining, LoadEntry, Message, Player, SetPiece } from "@/lib/types";
 
 async function resolvePlayer(token: string): Promise<Player | null> {
   const players = (await getAdminStore().list("players")) as Player[];
@@ -15,12 +17,19 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!player) return NextResponse.json({ error: "Onbekende link" }, { status: 404 });
 
   const store = getAdminStore();
-  const [entries, messages, trainings, setPieces] = await Promise.all([
+  const [entries, messages, trainings, setPieces, absences] = await Promise.all([
     store.list("load_entries") as Promise<LoadEntry[]>,
     store.list("messages") as Promise<Message[]>,
     store.list("individual_trainings") as Promise<IndividualTraining[]>,
     store.list("set_pieces") as Promise<SetPiece[]>,
+    store.list("absences") as Promise<Absence[]>,
   ]);
+
+  const absenceStatus = playerAbsenceStatus(player.id, absences, todayIso());
+  const currentAbsence =
+    absenceStatus?.kind === "current"
+      ? { until: absenceStatus.absence.until, reason: absenceStatus.absence.reason }
+      : null;
 
   const ownEntries = entries
     .filter((e) => e.player_id === player.id)
@@ -47,5 +56,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
     messages: ownMessages,
     trainings: ownTrainings,
     setPieces: ownSetPieces,
+    currentAbsence,
   });
 }

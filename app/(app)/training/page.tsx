@@ -37,12 +37,12 @@ function TrainingTile({ item, phases }: { item: ScheduleItem; phases: TrainingPh
             {phases.map((p, i) => (
               <li key={i} className="flex items-center justify-between gap-2">
                 <span className="truncate">{p.fase}</span>
-                <span className="shrink-0 text-slate-400">{p.duur_minuten}&apos;</span>
+                <span className="shrink-0 text-slate-500">{p.duur_minuten}&apos;</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-xs text-slate-400">Nog leeg — klik om oefeningen toe te voegen.</p>
+          <p className="mt-3 text-xs text-slate-500">Nog leeg — klik om oefeningen toe te voegen.</p>
         )}
       </Card>
     </Link>

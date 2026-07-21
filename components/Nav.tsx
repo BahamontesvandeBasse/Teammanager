@@ -22,7 +22,7 @@ const NAV: NavEntry[] = [
     icon: "📅",
     items: [
       { href: "/programma", label: "Speelprogramma", icon: "📅" },
-      { href: "/wedstrijden", label: "Voorbereiding & verslag", icon: "📋" },
+      { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋" },
       { href: "/spelhervattingen", label: "Spelhervattingen", icon: "🚩" },
       { href: "/schema", label: "Was & rijden", icon: "🚗" },
     ],

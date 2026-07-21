@@ -160,9 +160,14 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
 
   const today = todayIso();
-  const totalTrainings = scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).length;
+  // Alleen data meetellen op dagen die ook echt een geplande training waren — anders kan een
+  // per ongeluk dubbel of los ingevoerde belasting-registratie de teller boven het totaal duwen.
+  const trainingDates = new Set(
+    scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)
+  );
+  const totalTrainings = trainingDates.size;
   const attendedTrainings = new Set(
-    load.filter((l) => l.session_type === "training" && !l.absent && l.date < today).map((l) => l.date)
+    load.filter((l) => l.session_type === "training" && !l.absent && trainingDates.has(l.date)).map((l) => l.date)
   ).size;
   const attendancePct = totalTrainings > 0 ? Math.round((attendedTrainings / totalTrainings) * 100) : null;
 
@@ -242,7 +247,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
           <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
             {player.ai_summary}
             {player.ai_summary_generated_at && (
-              <p className="mt-3 text-xs text-slate-400">
+              <p className="mt-3 text-xs text-slate-500">
                 Gegenereerd op {new Date(player.ai_summary_generated_at).toLocaleString("nl-NL")}
               </p>
             )}

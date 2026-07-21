@@ -216,7 +216,7 @@ export default function SpelhervattingenPage() {
                   <div key={s}>
                     <h3 className="mb-2 text-sm font-semibold text-slate-700">{SET_PIECE_SIDE_LABELS[s]}</h3>
                     {items.length === 0 ? (
-                      <p className="text-xs text-slate-400">Nog geen spelhervattingen.</p>
+                      <p className="text-xs text-slate-500">Nog geen spelhervattingen.</p>
                     ) : (
                       <div className="flex flex-col gap-2">
                         {items.map((sp) => (

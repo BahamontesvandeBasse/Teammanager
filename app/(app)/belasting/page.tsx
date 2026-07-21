@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 import { isoWeek, todayIso } from "@/lib/format";
+import { playerAbsenceStatus } from "@/lib/absence";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { Absence, LoadEntry, Match, Message as ChatMessage, Player, ScheduleItem } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
@@ -289,9 +290,14 @@ export default function BelastingPage() {
         const latest = latestByPlayer.get(p.id);
         const lowRecovery = (latest?.fatigue && latest.fatigue <= 4) || (latest?.soreness && latest.soreness <= 4);
 
+        const absenceStatus = playerAbsenceStatus(p.id, absences, today);
+
         let risk: "red" | "amber" | "green" | "slate" = "slate";
         let advice = "❔ Nog geen data";
-        if (latest?.injury_flag) {
+        if (absenceStatus?.kind === "current") {
+          risk = "red";
+          advice = `🚫 Niet inzetbaar${absenceStatus.absence.reason ? ` — ${absenceStatus.absence.reason}` : " — afwezig"}`;
+        } else if (latest?.injury_flag) {
           risk = "red";
           advice = "🚑 Rustig aan — blessure gemeld";
         } else if (thisWeek === 0 && prevWeek === 0) {
@@ -321,7 +327,7 @@ export default function BelastingPage() {
         if (order[a.risk] !== order[b.risk]) return order[a.risk] - order[b.risk];
         return b.change - a.change;
       });
-  }, [activePlayers, entries, latestByPlayer]);
+  }, [activePlayers, entries, latestByPlayer, absences]);
 
   function toggleSelectedPlayer(id: string) {
     setSelectedPlayerIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -667,7 +673,7 @@ export default function BelastingPage() {
           <>
             <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
               {messages.filter((m) => m.player_id === chatPlayer).length === 0 && (
-                <p className="text-sm text-slate-400">Nog geen berichten met deze speler.</p>
+                <p className="text-sm text-slate-500">Nog geen berichten met deze speler.</p>
               )}
               {messages
                 .filter((m) => m.player_id === chatPlayer)
@@ -718,7 +724,7 @@ const SPARKLINE_STROKE: Record<"red" | "amber" | "green" | "slate", string> = {
 
 // Simpele lijn van de laatste weken belasting per speler — geen assen/cijfers, alleen het verloop.
 function Sparkline({ values, color }: { values: number[]; color: "red" | "amber" | "green" | "slate" }) {
-  if (values.length === 0) return <span className="text-xs text-slate-400">–</span>;
+  if (values.length === 0) return <span className="text-xs text-slate-500">–</span>;
   if (values.length === 1) {
     return (
       <svg width={80} height={24}>

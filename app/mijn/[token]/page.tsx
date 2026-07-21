@@ -1,8 +1,9 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import { formatDateShort, todayIso } from "@/lib/format";
-import { IndividualTraining, LoadEntry, Message, SET_PIECE_CATEGORIES, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, SetPieceCategory, SetPieceSide } from "@/lib/types";
+import { formatDate, formatDateShort, todayIso } from "@/lib/format";
+import { DrawingThumbnail, TacticsBoardEditor } from "@/components/TacticsBoard";
+import { DrawingElement, IndividualTraining, LoadEntry, Message, SET_PIECE_CATEGORIES, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, SetPieceCategory, SetPieceSide } from "@/lib/types";
 import {
   CATEGORY_ORDER,
   TRAINING_CATEGORY_ICON,
@@ -17,6 +18,7 @@ type ApiData = {
   messages: Message[];
   trainings: IndividualTraining[];
   setPieces: SetPiece[];
+  currentAbsence: { until: string; reason: string | null } | null;
 };
 
 export default function PlayerCheckinPage({ params }: { params: Promise<{ token: string }> }) {
@@ -50,6 +52,8 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
   const [spSide, setSpSide] = useState<SetPieceSide>("attacking");
   const [spTitle, setSpTitle] = useState("");
   const [spDescription, setSpDescription] = useState("");
+  const [spDrawing, setSpDrawing] = useState<DrawingElement[]>([]);
+  const [spDrawingOpen, setSpDrawingOpen] = useState(false);
   const [spBusy, setSpBusy] = useState(false);
   const [spMsg, setSpMsg] = useState<string | null>(null);
 
@@ -154,6 +158,7 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
           side: spSide,
           title: spTitle.trim(),
           description: spDescription.trim(),
+          drawing: spDrawing,
         }),
       });
       if (!res.ok) {
@@ -163,6 +168,8 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
       setSpMsg("Bedankt! De staf bekijkt je voorstel.");
       setSpTitle("");
       setSpDescription("");
+      setSpDrawing([]);
+      setSpDrawingOpen(false);
       await reload();
     } catch (e) {
       setSpMsg((e as Error).message);
@@ -211,6 +218,17 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
       </header>
 
       <main className="mx-auto max-w-md px-4 pt-5">
+        {data.currentAbsence && (
+          <section className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div className="font-semibold">🚫 Je staat als afwezig geregistreerd</div>
+            <p className="mt-1">
+              Tot en met {formatDate(data.currentAbsence.until)}
+              {data.currentAbsence.reason ? ` — ${data.currentAbsence.reason}` : ""}. De intensiteit-invoer hieronder staat
+              daarom uit. Klopt dit niet (meer)? Stuur de staf een bericht onderaan deze pagina.
+            </p>
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="mb-1 font-semibold">Extra trainingen 🎯</h2>
           <p className="mb-3 text-xs text-slate-500">
@@ -251,7 +269,7 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
                 {data.trainings.slice(0, 5).map((t) => (
                   <div key={t.id} className="flex justify-between text-xs text-slate-600">
                     <span>{t.title}</span>
-                    <span className="shrink-0 text-slate-400">{t.target_date ? formatDateShort(t.target_date) : ""}</span>
+                    <span className="shrink-0 text-slate-500">{t.target_date ? formatDateShort(t.target_date) : ""}</span>
                   </div>
                 ))}
               </div>
@@ -303,6 +321,26 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
               value={spDescription}
               onChange={(e) => setSpDescription(e.target.value)}
             />
+
+            {spDrawingOpen ? (
+              <div className="rounded-lg border border-slate-200 p-2">
+                <TacticsBoardEditor elements={spDrawing} onChange={setSpDrawing} />
+                <button
+                  onClick={() => setSpDrawingOpen(false)}
+                  className="mt-2 text-xs text-slate-500 hover:underline"
+                >
+                  tekening inklappen
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setSpDrawingOpen(true)}
+                className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-500"
+              >
+                {spDrawing.length > 0 ? "✏️ Tekening bewerken" : "🎨 Tekening toevoegen (optioneel)"}
+              </button>
+            )}
+
             <button
               onClick={submitSetPiece}
               disabled={spBusy || !spTitle.trim()}
@@ -316,10 +354,13 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
           {data.setPieces.length > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-3">
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jouw voorstellen</h3>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-2">
                 {data.setPieces.map((sp) => (
-                  <div key={sp.id} className="flex items-center justify-between text-xs text-slate-600">
-                    <span>{sp.title}</span>
+                  <div key={sp.id} className="flex items-center gap-2 text-xs text-slate-600">
+                    {sp.drawing.length > 0 && (
+                      <DrawingThumbnail strokes={sp.drawing} className="h-9 w-6 shrink-0 rounded border border-slate-200" />
+                    )}
+                    <span className="flex-1">{sp.title}</span>
                     <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${sp.approved ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
                       {sp.approved ? "goedgekeurd" : "voorgesteld"}
                     </span>
@@ -331,6 +372,7 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
         </section>
 
         <div ref={checkinRef} />
+        <fieldset disabled={!!data.currentAbsence} className={data.currentAbsence ? "opacity-50" : ""}>
         <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rose-600 text-xs font-bold text-white">1</span>
@@ -433,6 +475,7 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
             </div>
           )}
         </section>
+        </fieldset>
 
         {data.entries.length > 0 && (
           <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -455,7 +498,7 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
           <h2 className="mb-3 font-semibold">Berichten met de staf 💬</h2>
           <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto">
             {data.messages.length === 0 && (
-              <p className="text-sm text-slate-400">Nog geen berichten. Stuur gerust een vraag naar de staf.</p>
+              <p className="text-sm text-slate-500">Nog geen berichten. Stuur gerust een vraag naar de staf.</p>
             )}
             {data.messages.map((m) => (
               <div key={m.id} className={`flex ${m.sender === "player" ? "justify-end" : "justify-start"}`}>

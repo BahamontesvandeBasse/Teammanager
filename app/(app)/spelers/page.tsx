@@ -164,12 +164,17 @@ export default function SpelersPage() {
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
   const today = todayIso();
-  const totalTrainings = scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).length;
+  // Alleen data meetellen op dagen die ook echt een geplande training waren — anders kan een
+  // per ongeluk dubbel of los ingevoerde belasting-registratie de teller boven het totaal duwen.
+  const trainingDates = new Set(
+    scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)
+  );
+  const totalTrainings = trainingDates.size;
 
   function attendedTrainingsFor(playerId: string): number {
     return new Set(
       loadEntries
-        .filter((l) => l.player_id === playerId && l.session_type === "training" && !l.absent && l.date < today)
+        .filter((l) => l.player_id === playerId && l.session_type === "training" && !l.absent && trainingDates.has(l.date))
         .map((l) => l.date)
     ).size;
   }
@@ -187,7 +192,7 @@ export default function SpelersPage() {
           <h2 className="font-semibold">Speler toevoegen</h2>
           <button
             onClick={() => fileRef.current?.click()}
-            className="text-xs font-medium text-slate-400 hover:text-rose-600 hover:underline"
+            className="text-xs font-medium text-slate-500 hover:text-rose-600 hover:underline"
             title="Handig bij de start van het seizoen — importeer de hele lijst in één keer"
           >
             of importeer via Excel/CSV
@@ -253,7 +258,7 @@ export default function SpelersPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-inner ${
-                        p.shirt_number ? "text-white" : "bg-slate-100 text-slate-400"
+                        p.shirt_number ? "text-white" : "bg-slate-100 text-slate-500"
                       }`}
                       style={p.shirt_number ? JERSEY_STYLE : undefined}
                       onClick={(e) => e.stopPropagation()}
@@ -269,7 +274,7 @@ export default function SpelersPage() {
                     <div className="min-w-0">
                       <div className="truncate font-semibold leading-tight">{p.name}</div>
                       {p.birthdate && (
-                        <div className="text-xs text-slate-400">{ageFromBirthdate(p.birthdate)} jaar</div>
+                        <div className="text-xs text-slate-500">{ageFromBirthdate(p.birthdate)} jaar</div>
                       )}
                       {canEdit ? (
                         <button
@@ -292,7 +297,7 @@ export default function SpelersPage() {
                         e.stopPropagation();
                         removePlayer(p);
                       }}
-                      className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                      className="shrink-0 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                       title="Verwijderen"
                     >
                       ✕
@@ -314,7 +319,7 @@ export default function SpelersPage() {
                     >
                       {pos}
                       {canEdit && (
-                        <button onClick={() => togglePosition(p, pos)} className="text-slate-400 hover:text-red-500">
+                        <button onClick={() => togglePosition(p, pos)} className="text-slate-500 hover:text-red-500">
                           ×
                         </button>
                       )}
@@ -414,10 +419,10 @@ export default function SpelersPage() {
                     <div className="min-w-0">
                       <div className="truncate font-semibold leading-tight">{s.name}</div>
                       {s.birthdate && (
-                        <div className="text-xs text-slate-400">{ageFromBirthdate(s.birthdate)} jaar</div>
+                        <div className="text-xs text-slate-500">{ageFromBirthdate(s.birthdate)} jaar</div>
                       )}
                       <input
-                        className="w-full truncate bg-transparent text-xs text-slate-400 outline-none placeholder:text-slate-300 disabled:cursor-default"
+                        className="w-full truncate bg-transparent text-xs text-slate-500 outline-none placeholder:text-slate-400 disabled:cursor-default"
                         defaultValue={s.role ?? ""}
                         placeholder="Taak toevoegen"
                         disabled={!canEdit}
@@ -432,7 +437,7 @@ export default function SpelersPage() {
                         e.stopPropagation();
                         removeStaff(s);
                       }}
-                      className="shrink-0 text-xs text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                      className="shrink-0 text-xs text-slate-400 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                       title="Verwijderen"
                     >
                       ✕

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!player) return NextResponse.json({ error: "Onbekende link" }, { status: 404 });
 
   try {
-    const { category, side, title, description } = await req.json();
+    const { category, side, title, description, drawing } = await req.json();
     if (!SET_PIECE_CATEGORIES.includes(category)) {
       return NextResponse.json({ error: "Onbekende categorie." }, { status: 400 });
     }
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         side,
         title: title.trim(),
         description: typeof description === "string" ? description.trim() : "",
-        drawing: [],
+        drawing: Array.isArray(drawing) ? drawing : [],
         approved: false,
         suggested_by: "player",
         suggested_by_player_id: player.id,

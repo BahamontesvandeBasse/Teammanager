@@ -68,10 +68,10 @@ function TimelineSection({
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-slate-700">
-        {title} <span className="font-normal text-slate-400">({rows.length})</span>
+        {title} <span className="font-normal text-slate-500">({rows.length})</span>
       </h3>
       {rows.length === 0 ? (
-        <p className="text-xs text-slate-400">Geen afwezigheden geregistreerd.</p>
+        <p className="text-xs text-slate-500">Geen afwezigheden geregistreerd.</p>
       ) : (
         <div className="rounded-lg border border-slate-100">
           {/* Maandlabels */}

@@ -340,14 +340,14 @@ function OefeningenPageInner() {
                 {ex.drawing && ex.drawing.length > 0 ? (
                   <DrawingThumbnail strokes={ex.drawing} className="block w-full" />
                 ) : (
-                  <div className="flex aspect-[380/600] w-full items-center justify-center bg-slate-50 text-slate-300">
+                  <div className="flex aspect-[380/600] w-full items-center justify-center bg-slate-50 text-slate-400">
                     <span className="text-3xl" aria-hidden>🎨</span>
                   </div>
                 )}
                 <div className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-semibold leading-snug">{ex.title}</div>
-                    <span className="shrink-0 text-xs font-medium text-slate-400">{ex.duration_minutes}&apos;</span>
+                    <span className="shrink-0 text-xs font-medium text-slate-500">{ex.duration_minutes}&apos;</span>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Badge>{ex.subcategory}</Badge>

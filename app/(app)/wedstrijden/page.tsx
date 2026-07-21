@@ -768,7 +768,7 @@ function WedstrijdenPageInner() {
             <p className="mb-3 text-xs text-slate-500">Overige beschikbare spelers die niet in de basisopstelling staan.</p>
             <div className="flex flex-wrap gap-2">
               {activePlayers.filter((p) => !usedPlayerIds.has(p.id)).length === 0 ? (
-                <p className="text-sm text-slate-400">Geen spelers over — iedereen staat al in de basis.</p>
+                <p className="text-sm text-slate-500">Geen spelers over — iedereen staat al in de basis.</p>
               ) : (
                 activePlayers
                   .filter((p) => !usedPlayerIds.has(p.id))
@@ -829,7 +829,7 @@ function WedstrijdenPageInner() {
                   >
                     {l.label}
                     {filledCount > 0 && (
-                      <span className={`ml-1.5 text-xs ${selectedLine === l.key ? "text-rose-100" : "text-slate-400"}`}>
+                      <span className={`ml-1.5 text-xs ${selectedLine === l.key ? "text-rose-100" : "text-slate-500"}`}>
                         {filledCount}/4
                       </span>
                     )}
@@ -931,7 +931,7 @@ function WedstrijdenPageInner() {
                           placeholder="-"
                           onBlur={(e) => e.target.value !== String(selected.score_for ?? "") && updateScore("score_for", e.target.value)}
                         />
-                        <span className="text-slate-400">–</span>
+                        <span className="text-slate-500">–</span>
                         <input
                           type="number"
                           min={0}

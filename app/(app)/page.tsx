@@ -140,7 +140,7 @@ export default function DashboardPage() {
               >
                 <div
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-inner ${
-                    p.shirt_number ? "text-white" : "bg-slate-100 text-slate-400"
+                    p.shirt_number ? "text-white" : "bg-slate-100 text-slate-500"
                   }`}
                   style={p.shirt_number ? JERSEY_STYLE : undefined}
                 >

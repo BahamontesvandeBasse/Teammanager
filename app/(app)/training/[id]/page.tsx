@@ -225,7 +225,7 @@ export default function TrainingSessionPage({ params }: { params: Promise<{ id: 
                         </ul>
                       )
                     ) : (
-                      <p className="mt-1 text-xs text-slate-400">Losse fase — niet gekoppeld aan de oefeningenbank.</p>
+                      <p className="mt-1 text-xs text-slate-500">Losse fase — niet gekoppeld aan de oefeningenbank.</p>
                     )}
 
                     {exercise && exercise.tags.length > 0 && (

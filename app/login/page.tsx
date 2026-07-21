@@ -59,7 +59,7 @@ export default function LoginPage() {
           <Button type="submit" disabled={busy}>{busy ? "Inloggen…" : "Inloggen"}</Button>
         </form>
         <Message text={error} error />
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-xs text-slate-500">
           Accounts worden aangemaakt door de beheerder.
         </p>
       </Card>
