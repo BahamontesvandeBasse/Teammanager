@@ -24,6 +24,8 @@ export default function GebruikersClient({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetFor, setResetFor] = useState<{ email: string; password: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   function playerName(id: string | null) {
     if (!id) return null;
@@ -79,6 +81,24 @@ export default function GebruikersClient({
       return;
     }
     setUsers((prev) => prev.map((u) => (u.id === id ? body : u)));
+  }
+
+  async function resetPassword(u: PublicUser) {
+    if (!confirm(`Nieuw tijdelijk wachtwoord genereren voor ${u.email}? Het huidige wachtwoord werkt dan niet meer.`)) return;
+    setError(null);
+    setResetFor(null);
+    setResettingId(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Resetten mislukt.");
+        return;
+      }
+      setResetFor({ email: u.email, password: body.password });
+    } finally {
+      setResettingId(null);
+    }
   }
 
   async function removeUser(id: string) {
@@ -150,6 +170,20 @@ export default function GebruikersClient({
         <Message text={success} />
       </Card>
 
+      {resetFor && (
+        <Card className="mb-6 border-amber-300 bg-amber-50">
+          <h2 className="mb-1 text-sm font-semibold text-amber-800">Nieuw tijdelijk wachtwoord voor {resetFor.email}</h2>
+          <p className="mb-2 font-mono text-lg font-bold tracking-wide text-slate-900">{resetFor.password}</p>
+          <p className="text-xs text-amber-700">
+            Dit wordt maar één keer getoond — er is geen manier om het later opnieuw op te vragen. Deel het veilig met de
+            gebruiker; die kan na inloggen zelf een nieuw wachtwoord kiezen.
+          </p>
+          <div className="mt-3">
+            <Button variant="secondary" onClick={() => setResetFor(null)}>Sluiten</Button>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-slate-700">Bestaande accounts</h2>
         <div className="overflow-x-auto">
@@ -160,6 +194,7 @@ export default function GebruikersClient({
                 <th className={thCls}>E-mail</th>
                 <th className={thCls}>Rol</th>
                 <th className={thCls}>Speler</th>
+                <th className={thCls}>Laatst ingelogd</th>
                 <th className={thCls}></th>
               </tr>
             </thead>
@@ -186,11 +221,27 @@ export default function GebruikersClient({
                     )}
                   </td>
                   <td className={tdCls}>{playerName(u.player_id) ?? "—"}</td>
+                  <td className={`${tdCls} text-slate-500`}>
+                    {u.last_login_at
+                      ? new Date(u.last_login_at).toLocaleString("nl-NL", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "nooit"}
+                  </td>
                   <td className={tdCls}>
                     {u.role !== "admin" && (
-                      <Button variant="danger" onClick={() => removeUser(u.id)}>
-                        Verwijderen
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="secondary" disabled={resettingId === u.id} onClick={() => resetPassword(u)}>
+                          {resettingId === u.id ? "Bezig…" : "Reset wachtwoord"}
+                        </Button>
+                        <Button variant="danger" onClick={() => removeUser(u.id)}>
+                          Verwijderen
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

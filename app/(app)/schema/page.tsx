@@ -46,13 +46,15 @@ export default function SchemaPage() {
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
   async function generate() {
-    const hasExisting = wash.length > 0 || carpool.length > 0;
-    if (hasExisting && !confirm("Bestaand was- en rijschema vervangen door een nieuw gegenereerd schema? Handmatige aanpassingen gaan verloren.")) return;
     setBusy(true);
     try {
       const res = await api.generateSchedule();
       await reload();
-      setMsg(`Schema gegenereerd: ${res.wash} wasbeurten en ${res.carpool} rijbeurten.`);
+      setMsg(
+        res.wash === 0 && res.carpool === 0
+          ? "Niets aan te vullen — alle wedstrijden hebben al een was- en/of rijbeurt."
+          : `Aangevuld: ${res.wash} nieuwe wasbeurten en ${res.carpool} nieuwe rijbeurten. Bestaande indelingen zijn ongewijzigd gebleven.`
+      );
       setErr(false);
     } catch (e) {
       setMsg((e as Error).message);
@@ -86,11 +88,15 @@ export default function SchemaPage() {
         title="Was- & rijschema"
         subtitle="Automatisch eerlijk verdeeld over het seizoen. Pas individuele beurten aan via de dropdowns."
       />
+      <p className="mb-4 -mt-4 text-xs text-slate-500">
+        Nieuwe wedstrijden toegevoegd? Klik gerust opnieuw op genereren — alleen wedstrijden zonder beurt worden aangevuld,
+        al ingedeelde spelers blijven staan.
+      </p>
 
       {canEdit && (
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Button onClick={generate} disabled={busy || matches.length === 0 || activePlayers.length === 0}>
-          {busy ? "Bezig…" : wash.length > 0 ? "Opnieuw genereren" : "Genereer schema"}
+          {busy ? "Bezig…" : wash.length > 0 ? "Aanvullen voor nieuwe wedstrijden" : "Genereer schema"}
         </Button>
         {matches.length === 0 && <span className="text-sm text-amber-600">Importeer eerst het programma.</span>}
         {activePlayers.length === 0 && <span className="text-sm text-amber-600">Importeer eerst de spelerslijst.</span>}

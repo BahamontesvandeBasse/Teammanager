@@ -394,9 +394,16 @@ export default function ProgrammaPage() {
           )}
         </td>
         <td className={tdCls}>
-          <Link href={`/wedstrijden?match=${m.id}`} className="text-xs font-medium text-rose-600 hover:underline">
-            Bekijk →
-          </Link>
+          <div className="flex flex-col gap-0.5">
+            <Link href={`/wedstrijden?match=${m.id}`} className="text-xs font-medium text-rose-600 hover:underline">
+              Bekijk →
+            </Link>
+            {m.score_for !== null && m.score_against !== null && (
+              <Link href={`/resultaten?match=${m.id}`} className="text-xs font-medium text-rose-600 hover:underline">
+                🎥 Analyse →
+              </Link>
+            )}
+          </div>
         </td>
         <td className={tdCls}>
           {canEdit && (

@@ -8,12 +8,13 @@ export type AuthUser = {
   name: string;
   role: Role;
   player_id: string | null;
+  last_login_at: string | null;
 };
 
 export type PublicUser = Omit<AuthUser, "password_hash">;
 
-const SELECT_FIELDS = "id, email, password_hash, name, role, player_id";
-const PUBLIC_FIELDS = "id, email, name, role, player_id";
+const SELECT_FIELDS = "id, email, password_hash, name, role, player_id, last_login_at";
+const PUBLIC_FIELDS = "id, email, name, role, player_id, last_login_at";
 
 export async function findUserByEmail(email: string): Promise<AuthUser | null> {
   const rows = await sql().query(`select ${SELECT_FIELDS} from users where email = $1`, [
@@ -61,6 +62,14 @@ export async function updateUser(
     values
   );
   return ((rows as unknown as PublicUser[])[0] as PublicUser) ?? null;
+}
+
+export async function updateUserPassword(id: string, passwordHash: string): Promise<void> {
+  await sql().query(`update users set password_hash = $2 where id = $1`, [id, passwordHash]);
+}
+
+export async function recordLogin(id: string): Promise<void> {
+  await sql().query(`update users set last_login_at = now() where id = $1`, [id]);
 }
 
 export async function deleteUser(id: string): Promise<void> {

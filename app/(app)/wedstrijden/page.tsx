@@ -141,6 +141,7 @@ function WedstrijdenPageInner() {
   const [drawings, setDrawings] = useState<Record<string, DrawingElement[]>>({});
   const [openDrawingKey, setOpenDrawingKey] = useState<string | null>(null);
   const [warmupId, setWarmupId] = useState("");
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const reload = () =>
     Promise.all([
@@ -196,9 +197,7 @@ function WedstrijdenPageInner() {
     .filter((m) => !isPlayed(m))
     .sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`));
 
-  function loadMatch(matchId: string) {
-    setSelectedMatch(matchId);
-    const prep = preparations.find((p) => p.match_id === matchId);
+  function applyPreparation(prep: MatchPreparation | undefined) {
     setFormationState(prep?.formation ?? "");
     setWarmupId(prep?.warmup_id ?? "");
     const a: Record<string, string> = {};
@@ -226,7 +225,27 @@ function WedstrijdenPageInner() {
     setThrowinsNotes(prep?.throwins_notes ?? "");
     setDrawings(prep?.drawings ?? {});
     setOpenDrawingKey(null);
+  }
+
+  function loadMatch(matchId: string) {
+    setSelectedMatch(matchId);
+    applyPreparation(preparations.find((p) => p.match_id === matchId));
+    setCopyOpen(false);
     setMsg(null);
+  }
+
+  function copyPreparationFrom(matchId: string) {
+    const source = matches.find((m) => m.id === matchId);
+    const prep = preparations.find((p) => p.match_id === matchId);
+    if (!prep) return;
+    applyPreparation(prep);
+    setCopyOpen(false);
+    setMsg(
+      `Voorbereiding gekopieerd van ${
+        source ? `${formatDateShort(source.date)} · ${source.home_away === "away" ? `${source.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${source.opponent}`}` : "de vorige wedstrijd"
+      } — controleer en klik op Opslaan.`
+    );
+    setErr(false);
   }
 
   function selectFormation(f: string) {
@@ -418,7 +437,7 @@ function WedstrijdenPageInner() {
           {checklist.map((c) => (
             <span
               key={c.label}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                 c.done ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-500"
               }`}
             >
@@ -462,6 +481,10 @@ function WedstrijdenPageInner() {
     );
   }
 
+  const copyableMatches = [...matches]
+    .filter((m) => m.id !== selectedMatch && preparations.some((p) => p.match_id === m.id))
+    .sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`));
+
   const selectedIsPlayed = selected ? isPlayed(selected) : false;
   const times = selected ? computeMatchTimes(selected, clubs) : null;
   const selectedStats = selected ? matchStats.filter((s) => s.match_id === selected.id) : [];
@@ -503,13 +526,47 @@ function WedstrijdenPageInner() {
               <h2 className="font-semibold">
                 {selected.home_away === "away" ? `${selected.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${selected.opponent}`}
               </h2>
-              <Link
-                href={`/wedstrijden/print/${selected.id}`}
-                target="_blank"
-                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                🖨️ Print / PDF
-              </Link>
+              <div className="flex shrink-0 items-center gap-2">
+                <div className="relative">
+                  <button
+                    onClick={() => setCopyOpen((v) => !v)}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    📋 Kopieer wedstrijdvoorbereiding
+                  </button>
+                  {copyOpen && (
+                    <div className="absolute right-0 z-10 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                      {copyableMatches.length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-slate-500">
+                          Nog geen andere wedstrijd met een ingevulde voorbereiding.
+                        </p>
+                      ) : (
+                        <div className="max-h-64 overflow-y-auto">
+                          {copyableMatches.map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => copyPreparationFrom(m.id)}
+                              className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50"
+                            >
+                              <span className="font-medium text-slate-700">{formatDateShort(m.date)}</span>{" "}
+                              <span className="text-slate-500">
+                                {m.home_away === "away" ? `${m.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${m.opponent}`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <Link
+                  href={`/wedstrijden/print/${selected.id}`}
+                  target="_blank"
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  🖨️ Print / PDF
+                </Link>
+              </div>
             </div>
             <p className="mb-4 text-sm text-slate-500">{formatDate(selected.date)} · aftrap {selected.kickoff_time}</p>
 

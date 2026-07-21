@@ -86,14 +86,46 @@ export type GeneratedSchedule = {
   carpool: { match_id: string; player_id: string }[];
 };
 
+type ExistingDuty = { match_id: string; player_id: string };
+
+// Kiest de actieve speler met de minste beurten tot nu toe. Bij gelijke stand
+// wordt round-robin verder gerold vanaf `pointer` (zelfde volgorde als een
+// verse generatie zonder bestaande data — counts beginnen dan allemaal op 0).
+function pickLeastLoaded(
+  active: Player[],
+  counts: Map<string, number>,
+  pointer: number,
+  exclude: Set<string>
+): { id: string; nextPointer: number } {
+  const candidates = active.filter((p) => !exclude.has(p.id));
+  const minCount = Math.min(...candidates.map((p) => counts.get(p.id) ?? 0));
+  for (let i = 0; i < active.length; i++) {
+    const idx = (pointer + i) % active.length;
+    const p = active[idx];
+    if (exclude.has(p.id)) continue;
+    if ((counts.get(p.id) ?? 0) === minCount) {
+      return { id: p.id, nextPointer: idx + 1 };
+    }
+  }
+  return { id: candidates[0].id, nextPointer: pointer };
+}
+
 /**
- * Round-robin over de actieve spelers (gesorteerd op naam) zodat iedereen
- * over het seizoen zo gelijk mogelijk aan de beurt komt.
+ * Vult het was- en rijschema aan voor wedstrijden die nog geen beurt hebben —
+ * bestaande toewijzingen (`existingWash`/`existingCarpool`) blijven onaangeroerd
+ * en tellen mee in de eerlijkheidsverdeling, zodat het toevoegen van nieuwe
+ * wedstrijden en opnieuw genereren de al ingeplande spelers niet verschuift.
  * - Wasbeurt: 1 speler per wedstrijd (thuis én uit).
  * - Rijbeurt: alleen uitwedstrijden, ceil(spelers/4) rijders per wedstrijd.
- * Was- en rijrotatie lopen onafhankelijk van elkaar door.
+ * Was- en rijrotatie lopen onafhankelijk van elkaar door. Zonder bestaande
+ * data (verse generatie) is dit gelijk aan de oude round-robin-volgorde.
  */
-export function generateSchedule(players: Player[], matches: Match[]): GeneratedSchedule {
+export function generateSchedule(
+  players: Player[],
+  matches: Match[],
+  existingWash: ExistingDuty[] = [],
+  existingCarpool: ExistingDuty[] = []
+): GeneratedSchedule {
   const active = players
     .filter((p) => p.active)
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
@@ -105,18 +137,34 @@ export function generateSchedule(players: Player[], matches: Match[]): Generated
   const carpool: GeneratedSchedule["carpool"] = [];
   if (active.length === 0) return { wash, carpool };
 
-  let washIdx = 0;
-  let carIdx = 0;
+  const existingWashMatchIds = new Set(existingWash.map((w) => w.match_id));
+  const existingCarpoolMatchIds = new Set(existingCarpool.map((c) => c.match_id));
+
+  const washCounts = new Map<string, number>(active.map((p) => [p.id, 0]));
+  existingWash.forEach((w) => washCounts.has(w.player_id) && washCounts.set(w.player_id, washCounts.get(w.player_id)! + 1));
+  const carCounts = new Map<string, number>(active.map((p) => [p.id, 0]));
+  existingCarpool.forEach((c) => carCounts.has(c.player_id) && carCounts.set(c.player_id, carCounts.get(c.player_id)! + 1));
+
+  let washPointer = 0;
+  let carPointer = 0;
 
   for (const match of sortedMatches) {
-    wash.push({ match_id: match.id, player_id: active[washIdx % active.length].id });
-    washIdx++;
+    if (!existingWashMatchIds.has(match.id)) {
+      const { id, nextPointer } = pickLeastLoaded(active, washCounts, washPointer, new Set());
+      wash.push({ match_id: match.id, player_id: id });
+      washCounts.set(id, (washCounts.get(id) ?? 0) + 1);
+      washPointer = nextPointer;
+    }
 
-    if (match.home_away === "away") {
+    if (match.home_away === "away" && !existingCarpoolMatchIds.has(match.id)) {
       const cars = carsNeeded(active.length);
+      const chosen = new Set<string>();
       for (let c = 0; c < cars; c++) {
-        carpool.push({ match_id: match.id, player_id: active[carIdx % active.length].id });
-        carIdx++;
+        const { id, nextPointer } = pickLeastLoaded(active, carCounts, carPointer, chosen);
+        carpool.push({ match_id: match.id, player_id: id });
+        carCounts.set(id, (carCounts.get(id) ?? 0) + 1);
+        carPointer = nextPointer;
+        chosen.add(id);
       }
     }
   }

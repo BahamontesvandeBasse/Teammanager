@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/lib/db";
 import { generateSchedule } from "@/lib/schedule";
-import { Match, Player } from "@/lib/types";
+import { CarpoolDuty, Match, Player, WashDuty } from "@/lib/types";
 
-// Genereert het was- en rijschema voor het hele seizoen (vervangt bestaande schema's).
+// Vult het was- en rijschema aan voor wedstrijden die nog geen beurt hebben.
+// Bestaande beurten (ook handmatig aangepaste) blijven ongewijzigd staan —
+// nieuw toegevoegde wedstrijden verschuiven dus niemand die al is ingedeeld.
 export async function POST() {
   try {
     const store = getStore();
-    const [players, matches] = await Promise.all([
+    const [players, matches, existingWash, existingCarpool] = await Promise.all([
       store.list("players") as Promise<Player[]>,
       store.list("matches") as Promise<Match[]>,
+      store.list("wash_duty") as Promise<WashDuty[]>,
+      store.list("carpool_duty") as Promise<CarpoolDuty[]>,
     ]);
 
     if (players.filter((p) => p.active).length === 0) {
@@ -19,10 +23,12 @@ export async function POST() {
       return NextResponse.json({ error: "Geen wedstrijden — importeer eerst het programma." }, { status: 400 });
     }
 
-    const { wash, carpool } = generateSchedule(players, matches);
+    const matchIds = new Set(matches.map((m) => m.id));
+    const relevantWash = existingWash.filter((w) => matchIds.has(w.match_id));
+    const relevantCarpool = existingCarpool.filter((c) => matchIds.has(c.match_id));
 
-    await store.clear("wash_duty");
-    await store.clear("carpool_duty");
+    const { wash, carpool } = generateSchedule(players, matches, relevantWash, relevantCarpool);
+
     if (wash.length > 0) await store.insert("wash_duty", wash);
     if (carpool.length > 0) await store.insert("carpool_duty", carpool);
 

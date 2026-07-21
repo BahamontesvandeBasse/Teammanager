@@ -150,7 +150,7 @@ export default function DashboardPage() {
                   <div className="truncate text-sm font-semibold leading-tight">{p.name}</div>
                   <div className="mt-0.5 flex flex-wrap gap-1">
                     {p.positions.slice(0, 2).map((pos) => (
-                      <span key={pos} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                      <span key={pos} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
                         {pos}
                       </span>
                     ))}

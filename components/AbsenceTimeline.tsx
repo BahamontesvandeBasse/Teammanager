@@ -78,7 +78,7 @@ function TimelineSection({
               {months.map((m) => (
                 <div
                   key={m.iso}
-                  className="absolute top-0 border-l border-slate-100 pl-1 text-[10px] uppercase tracking-wide text-slate-400"
+                  className="absolute top-0 border-l border-slate-100 pl-1 text-[11px] uppercase text-slate-500"
                   style={{ left: `${m.leftPct}%` }}
                 >
                   {MONTHS_SHORT[toDate(m.iso).getMonth()]}

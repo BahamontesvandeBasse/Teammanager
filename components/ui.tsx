@@ -6,7 +6,7 @@ export function PageTitle({ title, subtitle }: { title: string; subtitle?: strin
   return (
     <div className="mb-6">
       <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-      {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+      {subtitle && <p className="mt-1 text-sm text-slate-600">{subtitle}</p>}
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function Badge({
     blue: "bg-blue-100 text-blue-800",
   }[color];
   return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}>
+    <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${styles}`}>
       {children}
     </span>
   );
@@ -83,8 +83,10 @@ export function Message({ text, error }: { text: string | null; error?: boolean 
   );
 }
 
+// text-base (16px) i.p.v. text-sm: voorkomt dat iOS Safari inzoomt bij het
+// focussen van een invoerveld met een kleiner lettertype, en is beter leesbaar.
 export const inputCls =
-  "rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 bg-white";
+  "rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 bg-white";
 
-export const thCls = "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500";
+export const thCls = "px-3 py-2 text-left text-xs font-semibold uppercase text-slate-600";
 export const tdCls = "px-3 py-2 text-sm";

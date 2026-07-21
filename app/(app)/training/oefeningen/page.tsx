@@ -359,7 +359,7 @@ function OefeningenPageInner() {
                   {ex.tags.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {ex.tags.map((t) => (
-                        <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">#{t}</span>
+                        <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">#{t}</span>
                       ))}
                     </div>
                   )}

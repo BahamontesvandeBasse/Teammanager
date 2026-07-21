@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { findUserByEmail } from "@/lib/auth/users";
+import { findUserByEmail, recordLogin } from "@/lib/auth/users";
 import { verifyPassword } from "@/lib/auth/passwords";
 import { neonConfigured } from "@/lib/db/neonClient";
 
@@ -33,6 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user) return null;
         const valid = await verifyPassword(password, user.password_hash);
         if (!valid) return null;
+        await recordLogin(user.id);
         return {
           id: user.id,
           email: user.email,

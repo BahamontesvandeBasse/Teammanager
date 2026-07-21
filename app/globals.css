@@ -12,6 +12,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Standaard Tailwind text-xs/text-sm (12px/14px) zijn op een telefoon lastig
+   leesbaar, vooral in tabellen en labels die overal in de app text-xs/text-sm
+   gebruiken. Verhoog de basismaat app-breed in plaats van los per component. */
+@theme {
+  --text-xs: 0.8125rem; /* 13px */
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem; /* 15px */
+  --text-sm--line-height: 1.4rem;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

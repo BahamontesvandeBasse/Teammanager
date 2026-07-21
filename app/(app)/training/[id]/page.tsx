@@ -231,7 +231,7 @@ export default function TrainingSessionPage({ params }: { params: Promise<{ id: 
                     {exercise && exercise.tags.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {exercise.tags.map((t) => (
-                          <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">#{t}</span>
+                          <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">#{t}</span>
                         ))}
                       </div>
                     )}

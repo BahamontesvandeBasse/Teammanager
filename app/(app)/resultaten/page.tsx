@@ -33,7 +33,7 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-center">
       <div className="text-lg font-bold text-slate-900">{value}</div>
-      <div className="text-[11px] text-slate-500">{label}</div>
+      <div className="text-xs text-slate-500">{label}</div>
     </div>
   );
 }
@@ -535,7 +535,10 @@ function ResultatenPageInner() {
 
           {currentVideo && (
             <Card className="mb-6">
-              <h2 className="mb-3 font-semibold">Observaties — {currentVideo.title || currentVideo.veo_url}</h2>
+              <h2 className="mb-3 font-semibold">Analyse — {currentVideo.title || currentVideo.veo_url}</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Kijk de wedstrijdbeelden terug en noteer per tijdstip wat je opvalt. Op basis daarvan genereert AI onderaan een coachadvies.
+              </p>
 
               {currentNotes.length === 0 ? (
                 <p className="mb-4 text-sm text-slate-500">Nog geen observaties. Voeg hieronder tijdstippen toe terwijl je terugkijkt.</p>
@@ -600,14 +603,16 @@ function ResultatenPageInner() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">AI-advies</h3>
                   {canEdit && (
-                    <Button onClick={generateAdvice} disabled={generating || currentNotes.length === 0}>
+                    <Button onClick={generateAdvice} disabled={generating}>
                       {generating ? "Bezig…" : currentVideo.ai_advice ? "Opnieuw genereren" : "Genereer AI-advies"}
                     </Button>
                   )}
                 </div>
-                {currentNotes.length === 0 && (
-                  <p className="mt-2 text-sm text-slate-500">Voeg eerst observaties toe — het advies wordt daarop gebaseerd.</p>
-                )}
+                <p className="mt-2 text-sm text-slate-500">
+                  {currentNotes.length === 0
+                    ? "Gebaseerd op de thema's uit de wedstrijdvoorbereiding — voeg optioneel observaties toe voor een preciezer advies."
+                    : "Gebaseerd op de thema's uit de wedstrijdvoorbereiding en je observaties."}
+                </p>
                 {currentVideo.ai_advice ? (
                   <div className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
                     {currentVideo.ai_advice}

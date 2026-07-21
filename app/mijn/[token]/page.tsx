@@ -416,7 +416,7 @@ function ScaleField({
         ))}
       </div>
       {caption && (
-        <div className="mt-0.5 flex justify-between text-[11px] text-slate-400">
+        <div className="mt-0.5 flex justify-between text-xs text-slate-500">
           <span>{caption.split(" · ")[0]}</span>
           <span>{caption.split(" · ")[1]}</span>
         </div>
