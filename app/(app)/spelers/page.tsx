@@ -10,7 +10,8 @@ import { Badge, Button, Card, Message, PageTitle, inputCls } from "@/components/
 import { AbsenceChip } from "@/components/PlayerAbsence";
 import { ageFromBirthdate, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
-import { Absence, Player, StaffMember } from "@/lib/types";
+import { isTrainingActivity } from "@/lib/training";
+import { Absence, LoadEntry, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function sortPlayers(list: Player[]): Player[] {
@@ -40,17 +41,27 @@ export default function SpelersPage() {
   const [newNumber, setNewNumber] = useState("");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffRole, setNewStaffRole] = useState("");
   const [editingPositionsFor, setEditingPositionsFor] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = () =>
-    Promise.all([api.list("players"), api.list("staff"), api.list("absences")])
-      .then(([p, s, a]) => {
+    Promise.all([
+      api.list("players"),
+      api.list("staff"),
+      api.list("absences"),
+      api.list("schedule_items"),
+      api.list("load_entries"),
+    ])
+      .then(([p, s, a, si, le]) => {
         setPlayers(sortPlayers(p));
         setStaff(s);
         setAbsences(a);
+        setScheduleItems(si);
+        setLoadEntries(le);
       })
       .finally(() => setLoading(false));
 
@@ -153,6 +164,15 @@ export default function SpelersPage() {
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
   const today = todayIso();
+  const totalTrainings = scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).length;
+
+  function attendedTrainingsFor(playerId: string): number {
+    return new Set(
+      loadEntries
+        .filter((l) => l.player_id === playerId && l.session_type === "training" && !l.absent && l.date < today)
+        .map((l) => l.date)
+    ).size;
+  }
 
   return (
     <div>
@@ -309,6 +329,12 @@ export default function SpelersPage() {
                     </button>
                   )}
                 </div>
+
+                {totalTrainings > 0 && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Badge color="slate">🏃 {attendedTrainingsFor(p.id)}/{totalTrainings} trainingen</Badge>
+                  </div>
+                )}
 
                 {canEdit && editingPositionsFor === p.id && (
                   <div onClick={(e) => e.stopPropagation()} className="flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 p-2">

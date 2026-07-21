@@ -236,12 +236,60 @@ export type MatchPreparation = {
   lineup: { slot: string; player_id: string | null; guest_name?: string | null; note?: string | null }[];
   substitutes: string[]; // player-ids, wisselspelers
   tactical_notes: TacticalNotes | null; // speelwijze/aandachtspunten, per team-/linieniveau en KNVB-moment
-  corners_notes: string | null;
-  freekicks_notes: string | null;
-  throwins_notes: string | null;
-  // Eén tekening per onderdeel, gesleuteld op "team", "line:verdediging"/"line:middenveld"/"line:aanval",
-  // "corners", "freekicks" of "throwins".
+  set_piece_ids: string[]; // gekozen spelhervattingen uit de bank (zie SetPiece), los per wedstrijd te kiezen
+  // Eén tekening per onderdeel, gesleuteld op "team" of "line:verdediging"/"line:middenveld"/"line:aanval".
   drawings: Record<string, DrawingElement[]>;
+};
+
+// Spelhervattingenbank: los van de wedstrijdvoorbereiding. Spelers en staf kunnen
+// een spelhervatting voorstellen (approved: false); de staf keurt goed of verwijdert
+// 'm. Alleen goedgekeurde spelhervattingen zijn te kiezen bij een wedstrijdvoorbereiding.
+export type SetPieceCategory =
+  | "corner"
+  | "vrije_trap_schot"
+  | "vrije_trap_voorzet"
+  | "aftrap"
+  | "inworp"
+  | "keeperbal";
+
+export const SET_PIECE_CATEGORIES: SetPieceCategory[] = [
+  "corner",
+  "vrije_trap_schot",
+  "vrije_trap_voorzet",
+  "aftrap",
+  "inworp",
+  "keeperbal",
+];
+
+export const SET_PIECE_CATEGORY_LABELS: Record<SetPieceCategory, string> = {
+  corner: "Corner",
+  vrije_trap_schot: "Vrije trap — schot op doel",
+  vrije_trap_voorzet: "Vrije trap — voorzet",
+  aftrap: "Aftrap",
+  inworp: "Inworp",
+  keeperbal: "Keeperbal",
+};
+
+export type SetPieceSide = "attacking" | "defending";
+
+export const SET_PIECE_SIDES: SetPieceSide[] = ["attacking", "defending"];
+
+export const SET_PIECE_SIDE_LABELS: Record<SetPieceSide, string> = {
+  attacking: "Aanvallen",
+  defending: "Verdedigen",
+};
+
+export type SetPiece = {
+  id: string;
+  category: SetPieceCategory;
+  side: SetPieceSide;
+  title: string;
+  description: string;
+  drawing: DrawingElement[];
+  approved: boolean; // false = nog een suggestie, wacht op goedkeuring door de staf
+  suggested_by: "staff" | "player";
+  suggested_by_player_id: string | null; // gezet wanneer suggested_by === "player"
+  created_at: string;
 };
 
 export type VideoLink = {
@@ -280,6 +328,7 @@ export type EntityMap = {
   training_sessions: TrainingSession;
   warmups: WarmingUp;
   exercises: Exercise;
+  set_pieces: SetPiece;
 };
 
 export type EntityName = keyof EntityMap;
@@ -303,6 +352,7 @@ export const ENTITIES: EntityName[] = [
   "training_sessions",
   "warmups",
   "exercises",
+  "set_pieces",
 ];
 
 export const TEAM_NAME = "Sv Steenwijkerwold JO19-1";

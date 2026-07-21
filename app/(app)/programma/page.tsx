@@ -108,6 +108,7 @@ export default function ProgrammaPage() {
   const [newNotes, setNewNotes] = useState("");
 
   const [absFormOpen, setAbsFormOpen] = useState(false);
+  const [editingAbsenceId, setEditingAbsenceId] = useState<string | null>(null);
   const [absPerson, setAbsPerson] = useState(""); // "player:<id>" of "staff:<id>"
   const [absFrom, setAbsFrom] = useState("");
   const [absUntil, setAbsUntil] = useState("");
@@ -341,7 +342,25 @@ export default function ProgrammaPage() {
     await reload();
   }
 
-  async function addAbsence() {
+  function resetAbsenceForm() {
+    setEditingAbsenceId(null);
+    setAbsPerson("");
+    setAbsFrom("");
+    setAbsUntil("");
+    setAbsReason("");
+    setAbsFormOpen(false);
+  }
+
+  function startEditAbsence(a: Absence) {
+    setEditingAbsenceId(a.id);
+    setAbsPerson(a.player_id ? `player:${a.player_id}` : `staff:${a.staff_id}`);
+    setAbsFrom(a.from);
+    setAbsUntil(a.until);
+    setAbsReason(a.reason ?? "");
+    setAbsFormOpen(true);
+  }
+
+  async function saveAbsence() {
     if (!absPerson || !absFrom || !absUntil) {
       flash("Kies een persoon en een van/tot-datum.", true);
       return;
@@ -351,21 +370,23 @@ export default function ProgrammaPage() {
       return;
     }
     const [kind, id] = absPerson.split(":");
+    const patch = {
+      player_id: kind === "player" ? id : null,
+      staff_id: kind === "staff" ? id : null,
+      from: absFrom,
+      until: absUntil,
+      reason: absReason.trim() || null,
+    };
     try {
-      await api.create("absences", {
-        player_id: kind === "player" ? id : null,
-        staff_id: kind === "staff" ? id : null,
-        from: absFrom,
-        until: absUntil,
-        reason: absReason.trim() || null,
-      });
-      setAbsPerson("");
-      setAbsFrom("");
-      setAbsUntil("");
-      setAbsReason("");
-      setAbsFormOpen(false);
+      if (editingAbsenceId) {
+        await api.update("absences", editingAbsenceId, patch);
+        flash("Afwezigheid bijgewerkt.");
+      } else {
+        await api.create("absences", patch);
+        flash("Afwezigheid toegevoegd.");
+      }
+      resetAbsenceForm();
       await reload();
-      flash("Afwezigheid toegevoegd.");
     } catch (e) {
       flash((e as Error).message, true);
     }
@@ -373,6 +394,7 @@ export default function ProgrammaPage() {
 
   async function removeAbsence(a: Absence) {
     await api.remove("absences", a.id);
+    if (editingAbsenceId === a.id) resetAbsenceForm();
     await reload();
   }
 
@@ -917,7 +939,7 @@ export default function ProgrammaPage() {
               <h2 className="font-semibold">Afwezigheid beheren</h2>
               {canEdit && (
                 <button
-                  onClick={() => setAbsFormOpen(!absFormOpen)}
+                  onClick={() => (absFormOpen ? resetAbsenceForm() : setAbsFormOpen(true))}
                   className="text-xs font-medium text-emerald-600 hover:underline"
                 >
                   {absFormOpen ? "Sluiten" : "+ Toevoegen"}
@@ -926,10 +948,11 @@ export default function ProgrammaPage() {
             </div>
             <p className="mb-3 text-xs text-slate-500">
               Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
+              Klik in de tijdlijn op een bestaande balk om 'm te bewerken, bijvoorbeeld als iemand eerder terug is.
             </p>
             {canEdit && absFormOpen && (
             <div className="mb-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)}>
+              <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)} disabled={!!editingAbsenceId}>
                 <option value="">— Kies speler/staflid —</option>
                 <optgroup label="Spelers">
                   {players.map((p) => (
@@ -951,12 +974,25 @@ export default function ProgrammaPage() {
                 value={absReason}
                 onChange={(e) => setAbsReason(e.target.value)}
               />
-              <Button onClick={addAbsence}>Toevoegen</Button>
+              <div className="flex items-center gap-3">
+                <Button onClick={saveAbsence}>{editingAbsenceId ? "Bijwerken" : "Toevoegen"}</Button>
+                {editingAbsenceId && (
+                  <button className="text-xs text-slate-500 hover:underline" onClick={resetAbsenceForm}>
+                    annuleren
+                  </button>
+                )}
+              </div>
             </div>
             )}
 
             <div className="mt-5">
-              <AbsenceTimeline players={players} staff={staff} absences={absences} onRemove={canEdit ? removeAbsence : undefined} />
+              <AbsenceTimeline
+                players={players}
+                staff={staff}
+                absences={absences}
+                onRemove={canEdit ? removeAbsence : undefined}
+                onEdit={canEdit ? startEditAbsence : undefined}
+              />
             </div>
           </Card>
 

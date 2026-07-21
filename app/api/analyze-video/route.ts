@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/db";
-import { Match, MatchPreparation, Player, TacticalMoment, VideoLink, VideoNote } from "@/lib/types";
+import { Match, MatchPreparation, Player, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, TacticalMoment, VideoLink, VideoNote } from "@/lib/types";
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -21,7 +21,7 @@ const LINE_LABELS: Record<string, string> = {
   aanval: "Aanval",
 };
 
-function buildPrepThemes(prep: MatchPreparation | undefined): string {
+function buildPrepThemes(prep: MatchPreparation | undefined, setPieces: SetPiece[]): string {
   if (!prep) return "";
   const lines: string[] = [];
   if (prep.formation) lines.push(`Opstelling/systeem: ${prep.formation}`);
@@ -41,9 +41,12 @@ function buildPrepThemes(prep: MatchPreparation | undefined): string {
     }
   }
 
-  if (prep.corners_notes?.trim()) lines.push(`Corners: ${prep.corners_notes.trim()}`);
-  if (prep.freekicks_notes?.trim()) lines.push(`Vrije trappen: ${prep.freekicks_notes.trim()}`);
-  if (prep.throwins_notes?.trim()) lines.push(`Ingooien: ${prep.throwins_notes.trim()}`);
+  const chosenSetPieces = setPieces.filter((sp) => prep.set_piece_ids?.includes(sp.id));
+  for (const sp of chosenSetPieces) {
+    lines.push(
+      `Spelhervatting — ${SET_PIECE_CATEGORY_LABELS[sp.category]} (${SET_PIECE_SIDE_LABELS[sp.side]}): ${sp.title}${sp.description.trim() ? ` — ${sp.description.trim()}` : ""}`
+    );
+  }
 
   return lines.join("\n");
 }
@@ -62,12 +65,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const store = getStore();
-    const [videoLinks, videoNotes, matches, players, preparations] = await Promise.all([
+    const [videoLinks, videoNotes, matches, players, preparations, setPieces] = await Promise.all([
       store.list("video_links"),
       store.list("video_notes"),
       store.list("matches"),
       store.list("players"),
       store.list("match_preparations"),
+      store.list("set_pieces"),
     ]);
 
     const videoLink = (videoLinks as VideoLink[]).find((v) => v.id === video_link_id);
@@ -79,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const match = (matches as Match[]).find((m) => m.id === videoLink.match_id);
     const prep = (preparations as MatchPreparation[]).find((p) => p.match_id === videoLink.match_id);
-    const prepThemes = buildPrepThemes(prep);
+    const prepThemes = buildPrepThemes(prep, setPieces as SetPiece[]);
 
     if (notes.length === 0 && !prepThemes) {
       return NextResponse.json(

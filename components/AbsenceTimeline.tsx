@@ -44,6 +44,7 @@ function TimelineSection({
   rangeEnd,
   today,
   onRemove,
+  onEdit,
 }: {
   title: string;
   rows: Row[];
@@ -51,6 +52,7 @@ function TimelineSection({
   rangeEnd: string;
   today: string;
   onRemove?: (a: Absence) => void;
+  onEdit?: (a: Absence) => void;
 }) {
   const totalDays = daysBetween(rangeStart, rangeEnd);
 
@@ -122,13 +124,17 @@ function TimelineSection({
                   return (
                     <div
                       key={a.id}
-                      className={`group absolute top-1/2 flex h-5 -translate-y-1/2 items-center justify-center rounded-md ${color} px-1 shadow-sm transition-colors`}
+                      className={`group absolute top-1/2 flex h-5 -translate-y-1/2 items-center justify-center rounded-md ${color} px-1 shadow-sm transition-colors ${onEdit ? "cursor-pointer" : ""}`}
                       style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                      title={`${formatDateShort(a.from)} t/m ${formatDateShort(a.until)}${a.reason ? ` — ${a.reason}` : ""}`}
+                      title={`${formatDateShort(a.from)} t/m ${formatDateShort(a.until)}${a.reason ? ` — ${a.reason}` : ""}${onEdit ? " (klik om te bewerken)" : ""}`}
+                      onClick={() => onEdit?.(a)}
                     >
                       {onRemove && (
                         <button
-                          onClick={() => onRemove(a)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(a);
+                          }}
                           className="invisible absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] leading-none text-red-500 shadow ring-1 ring-slate-200 group-hover:visible"
                           title="Verwijderen"
                         >
@@ -152,11 +158,13 @@ export function AbsenceTimeline({
   staff,
   absences,
   onRemove,
+  onEdit,
 }: {
   players: Player[];
   staff: StaffMember[];
   absences: Absence[];
   onRemove?: (a: Absence) => void;
+  onEdit?: (a: Absence) => void;
 }) {
   const today = todayIso();
 
@@ -196,8 +204,8 @@ export function AbsenceTimeline({
           <span className="inline-block h-2.5 border-l border-dashed border-rose-300" /> vandaag
         </span>
       </div>
-      <TimelineSection title="Spelers" rows={playerRows} rangeStart={rangeStart} rangeEnd={rangeEnd} today={today} onRemove={onRemove} />
-      <TimelineSection title="Staf" rows={staffRows} rangeStart={rangeStart} rangeEnd={rangeEnd} today={today} onRemove={onRemove} />
+      <TimelineSection title="Spelers" rows={playerRows} rangeStart={rangeStart} rangeEnd={rangeEnd} today={today} onRemove={onRemove} onEdit={onEdit} />
+      <TimelineSection title="Staf" rows={staffRows} rangeStart={rangeStart} rangeEnd={rangeEnd} today={today} onRemove={onRemove} onEdit={onEdit} />
     </div>
   );
 }

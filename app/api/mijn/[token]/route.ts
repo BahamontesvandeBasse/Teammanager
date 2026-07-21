@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminStore } from "@/lib/db";
-import { IndividualTraining, LoadEntry, Message, Player } from "@/lib/types";
+import { IndividualTraining, LoadEntry, Message, Player, SetPiece } from "@/lib/types";
 
 async function resolvePlayer(token: string): Promise<Player | null> {
   const players = (await getAdminStore().list("players")) as Player[];
@@ -15,10 +15,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!player) return NextResponse.json({ error: "Onbekende link" }, { status: 404 });
 
   const store = getAdminStore();
-  const [entries, messages, trainings] = await Promise.all([
+  const [entries, messages, trainings, setPieces] = await Promise.all([
     store.list("load_entries") as Promise<LoadEntry[]>,
     store.list("messages") as Promise<Message[]>,
     store.list("individual_trainings") as Promise<IndividualTraining[]>,
+    store.list("set_pieces") as Promise<SetPiece[]>,
   ]);
 
   const ownEntries = entries
@@ -35,10 +36,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 10);
 
+  const ownSetPieces = setPieces
+    .filter((sp) => sp.suggested_by_player_id === player.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 10);
+
   return NextResponse.json({
     player: { id: player.id, name: player.name },
     entries: ownEntries,
     messages: ownMessages,
     trainings: ownTrainings,
+    setPieces: ownSetPieces,
   });
 }

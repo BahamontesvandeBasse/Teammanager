@@ -20,6 +20,11 @@ import {
   MatchPreparation,
   MatchStat,
   Player,
+  SET_PIECE_CATEGORIES,
+  SET_PIECE_CATEGORY_LABELS,
+  SET_PIECE_SIDES,
+  SET_PIECE_SIDE_LABELS,
+  SetPiece,
   TacticalMoment,
   TacticalMomentNotes,
   TacticalNotes,
@@ -32,9 +37,6 @@ import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function drawingLabel(key: string): string {
   if (key === "team") return "Team-niveau";
-  if (key === "corners") return "Corners";
-  if (key === "freekicks") return "Vrije trappen";
-  if (key === "throwins") return "Ingooien";
   const line = key.split(":")[1];
   return `Linie-niveau — ${line ? line.charAt(0).toUpperCase() + line.slice(1) : line}`;
 }
@@ -120,6 +122,7 @@ function WedstrijdenPageInner() {
   const [videoLinks, setVideoLinks] = useState<VideoLink[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [warmups, setWarmups] = useState<WarmingUp[]>([]);
+  const [setPieces, setSetPieces] = useState<SetPiece[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState("");
   const [busy, setBusy] = useState(false);
@@ -135,9 +138,7 @@ function WedstrijdenPageInner() {
   const [substitutes, setSubstitutes] = useState<string[]>([]);
   const [tactics, setTactics] = useState<TacticalNotes>(emptyTacticalNotes());
   const [selectedLine, setSelectedLine] = useState<Line>("verdediging");
-  const [cornersNotes, setCornersNotes] = useState("");
-  const [freekicksNotes, setFreekicksNotes] = useState("");
-  const [throwinsNotes, setThrowinsNotes] = useState("");
+  const [selectedSetPieceIds, setSelectedSetPieceIds] = useState<string[]>([]);
   const [drawings, setDrawings] = useState<Record<string, DrawingElement[]>>({});
   const [openDrawingKey, setOpenDrawingKey] = useState<string | null>(null);
   const [warmupId, setWarmupId] = useState("");
@@ -156,8 +157,9 @@ function WedstrijdenPageInner() {
       api.list("video_links"),
       api.list("absences"),
       api.list("warmups"),
+      api.list("set_pieces"),
     ])
-      .then(([p, m, c, prep, stats, load, wash, carpool, videos, abs, wu]) => {
+      .then(([p, m, c, prep, stats, load, wash, carpool, videos, abs, wu, sp]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setMatches([...m].sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`)));
         setClubs(c);
@@ -169,6 +171,7 @@ function WedstrijdenPageInner() {
         setVideoLinks(videos);
         setAbsences(abs);
         setWarmups([...wu].sort((a, b) => a.name.localeCompare(b.name, "nl")));
+        setSetPieces(sp);
       })
       .finally(() => setLoading(false));
 
@@ -189,6 +192,7 @@ function WedstrijdenPageInner() {
   }, [pickingSlot]);
 
   const activePlayers = players.filter((p) => p.active);
+  const approvedSetPieces = setPieces.filter((sp) => sp.approved);
   const currentPrep = preparations.find((prep) => prep.match_id === selectedMatch);
   const slots = layoutForFormation(formation);
   const usedPlayerIds = new Set(Object.values(slotAssignments));
@@ -220,9 +224,7 @@ function WedstrijdenPageInner() {
     setPickingSlot(null);
     setTactics(mergeTacticalNotes(prep?.tactical_notes));
     setSelectedLine("verdediging");
-    setCornersNotes(prep?.corners_notes ?? "");
-    setFreekicksNotes(prep?.freekicks_notes ?? "");
-    setThrowinsNotes(prep?.throwins_notes ?? "");
+    setSelectedSetPieceIds(prep?.set_piece_ids ?? []);
     setDrawings(prep?.drawings ?? {});
     setOpenDrawingKey(null);
   }
@@ -303,6 +305,10 @@ function WedstrijdenPageInner() {
     setSubstitutes((prev) => (prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]));
   }
 
+  function toggleSetPiece(id: string) {
+    setSelectedSetPieceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
   async function save() {
     if (!selectedMatch) return;
     setBusy(true);
@@ -320,9 +326,7 @@ function WedstrijdenPageInner() {
         lineup,
         substitutes: finalSubstitutes,
         tactical_notes: trimTacticalNotes(tactics),
-        corners_notes: cornersNotes.trim() || null,
-        freekicks_notes: freekicksNotes.trim() || null,
-        throwins_notes: throwinsNotes.trim() || null,
+        set_piece_ids: selectedSetPieceIds,
         drawings,
       };
       if (currentPrep) {
@@ -399,7 +403,7 @@ function WedstrijdenPageInner() {
       (Object.values(tactics.team).some((v) => v.trim()) ||
         Object.values(tactics.line).some((line) => Object.values(line).some((v) => v.trim())));
 
-    const standardDone = !!(prep?.corners_notes?.trim() || prep?.freekicks_notes?.trim() || prep?.throwins_notes?.trim());
+    const standardDone = !!(prep?.set_piece_ids && prep.set_piece_ids.length > 0);
 
     return [
       { label: "Opstelling", done: lineupDone, detail: slots.length > 0 ? `${filledSlots}/${slots.length}` : null },
@@ -850,42 +854,57 @@ function WedstrijdenPageInner() {
           </Card>
 
           <Card className="mb-6">
-            <h2 className="mb-3 font-semibold">Standaardsituaties</h2>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <label className="text-sm">
-                <span className="mb-1 block text-slate-500">Corners</span>
-                <textarea
-                  className={`${inputCls} w-full`}
-                  rows={4}
-                  placeholder="Wie staat waar, wie neemt ze…"
-                  value={cornersNotes}
-                  onChange={(e) => setCornersNotes(e.target.value)}
-                />
-                {renderDrawingSlot("corners")}
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-slate-500">Vrije trappen</span>
-                <textarea
-                  className={`${inputCls} w-full`}
-                  rows={4}
-                  placeholder="Wie staat waar, wie neemt ze…"
-                  value={freekicksNotes}
-                  onChange={(e) => setFreekicksNotes(e.target.value)}
-                />
-                {renderDrawingSlot("freekicks")}
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-slate-500">Ingooien</span>
-                <textarea
-                  className={`${inputCls} w-full`}
-                  rows={4}
-                  placeholder="Wie staat waar, wie neemt ze…"
-                  value={throwinsNotes}
-                  onChange={(e) => setThrowinsNotes(e.target.value)}
-                />
-                {renderDrawingSlot("throwins")}
-              </label>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-semibold">Standaardsituaties</h2>
+              <Link href="/spelhervattingen" className="text-xs text-rose-600 hover:underline">
+                Beheer spelhervattingen →
+              </Link>
             </div>
+            {approvedSetPieces.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                Nog geen goedgekeurde spelhervattingen. Voeg ze toe via{" "}
+                <Link href="/spelhervattingen" className="text-rose-600 hover:underline">Spelhervattingen</Link>.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {SET_PIECE_CATEGORIES.map((cat) => {
+                  const inCategory = approvedSetPieces.filter((sp) => sp.category === cat);
+                  if (inCategory.length === 0) return null;
+                  return (
+                    <div key={cat}>
+                      <h3 className="mb-1.5 text-sm font-semibold text-slate-700">{SET_PIECE_CATEGORY_LABELS[cat]}</h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {SET_PIECE_SIDES.map((side) => {
+                          const items = inCategory.filter((sp) => sp.side === side);
+                          if (items.length === 0) return null;
+                          return (
+                            <div key={side}>
+                              <span className="mb-1 block text-xs text-slate-500">{SET_PIECE_SIDE_LABELS[side]}</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {items.map((sp) => (
+                                  <button
+                                    key={sp.id}
+                                    onClick={() => toggleSetPiece(sp.id)}
+                                    title={sp.description || undefined}
+                                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                                      selectedSetPieceIds.includes(sp.id)
+                                        ? "border-rose-600 bg-rose-600 text-white"
+                                        : "border-slate-300 bg-white text-slate-600 hover:border-rose-300"
+                                    }`}
+                                  >
+                                    {sp.title}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Card>
 
           <div className="mb-6 flex items-center gap-3">

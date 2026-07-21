@@ -6,9 +6,10 @@ import { api } from "@/lib/api";
 import { ageFromBirthdate, formatDate, todayIso } from "@/lib/format";
 import { generateToken } from "@/lib/token";
 import { playerAbsenceStatus } from "@/lib/absence";
+import { isTrainingActivity } from "@/lib/training";
 import { Badge, Button, Card, Message, PageTitle, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
-import { Absence, LoadEntry, Match, MatchStat, Player, VideoLink, VideoNote } from "@/lib/types";
+import { Absence, LoadEntry, Match, MatchStat, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 function formatTimestamp(seconds: number): string {
@@ -29,6 +30,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [videoLinks, setVideoLinks] = useState<VideoLink[]>([]);
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -43,8 +45,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       api.list("video_links"),
       api.list("video_notes"),
       api.list("absences"),
+      api.list("schedule_items"),
     ])
-      .then(([players, m, s, l, vl, vn, a]) => {
+      .then(([players, m, s, l, vl, vn, a, si]) => {
         const found = players.find((p) => p.id === id) ?? null;
         if (!found) {
           setNotFound(true);
@@ -57,6 +60,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         setVideoLinks(vl);
         setVideoNotes(vn.filter((x) => x.player_id === id));
         setAbsences(a);
+        setScheduleItems(si);
       })
       .finally(() => setLoading(false));
 
@@ -154,6 +158,13 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const recentLoad = load.slice(0, 10);
   const injuryFlags = recentLoad.filter((l) => l.injury_flag);
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
+
+  const today = todayIso();
+  const totalTrainings = scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).length;
+  const attendedTrainings = new Set(
+    load.filter((l) => l.session_type === "training" && !l.absent && l.date < today).map((l) => l.date)
+  ).size;
+  const attendancePct = totalTrainings > 0 ? Math.round((attendedTrainings / totalTrainings) * 100) : null;
 
   const hasData = stats.length > 0 || load.length > 0 || videoNotes.length > 0;
 
@@ -286,6 +297,10 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
         <Card>
           <h2 className="mb-3 font-semibold">Belasting (laatste {recentLoad.length})</h2>
+          <div className="mb-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <span className="font-semibold">{attendedTrainings}</span> / <span className="font-semibold">{totalTrainings}</span> trainingen aanwezig
+            {attendancePct !== null && <span className="text-slate-500"> ({attendancePct}%)</span>}
+          </div>
           {injuryFlags.length > 0 && (
             <div className="mb-3">
               <Badge color="red">⚠ {injuryFlags.length}× blessure gemeld</Badge>

@@ -2,7 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { formatDateShort, todayIso } from "@/lib/format";
-import { IndividualTraining, LoadEntry, Message } from "@/lib/types";
+import { IndividualTraining, LoadEntry, Message, SET_PIECE_CATEGORIES, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, SetPieceCategory, SetPieceSide } from "@/lib/types";
 import {
   CATEGORY_ORDER,
   TRAINING_CATEGORY_ICON,
@@ -16,6 +16,7 @@ type ApiData = {
   entries: LoadEntry[];
   messages: Message[];
   trainings: IndividualTraining[];
+  setPieces: SetPiece[];
 };
 
 export default function PlayerCheckinPage({ params }: { params: Promise<{ token: string }> }) {
@@ -44,6 +45,13 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
   const [loggingTraining, setLoggingTraining] = useState<string | null>(null);
   const [trainingMsg, setTrainingMsg] = useState<string | null>(null);
   const checkinRef = useRef<HTMLDivElement>(null);
+
+  const [spCategory, setSpCategory] = useState<SetPieceCategory>(SET_PIECE_CATEGORIES[0]);
+  const [spSide, setSpSide] = useState<SetPieceSide>("attacking");
+  const [spTitle, setSpTitle] = useState("");
+  const [spDescription, setSpDescription] = useState("");
+  const [spBusy, setSpBusy] = useState(false);
+  const [spMsg, setSpMsg] = useState<string | null>(null);
 
   const reload = () =>
     fetch(`/api/mijn/${token}`)
@@ -131,6 +139,38 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
     }
   }
 
+  async function submitSetPiece() {
+    if (!spTitle.trim()) {
+      setSpMsg("Vul een titel in.");
+      return;
+    }
+    setSpBusy(true);
+    try {
+      const res = await fetch(`/api/mijn/${token}/set-piece-suggestion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: spCategory,
+          side: spSide,
+          title: spTitle.trim(),
+          description: spDescription.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? "Versturen mislukt");
+      }
+      setSpMsg("Bedankt! De staf bekijkt je voorstel.");
+      setSpTitle("");
+      setSpDescription("");
+      await reload();
+    } catch (e) {
+      setSpMsg((e as Error).message);
+    } finally {
+      setSpBusy(false);
+    }
+  }
+
   async function sendMessage() {
     if (!chatBody.trim()) return;
     setChatBusy(true);
@@ -212,6 +252,77 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
                   <div key={t.id} className="flex justify-between text-xs text-slate-600">
                     <span>{t.title}</span>
                     <span className="shrink-0 text-slate-400">{t.target_date ? formatDateShort(t.target_date) : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-1 font-semibold">Spelhervattingen 🚩</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Heb je een idee voor een corner, vrije trap, aftrap, inworp of keeperbal? Stel &apos;m voor — de staf bekijkt en keurt goed.
+          </p>
+
+          <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                value={spCategory}
+                onChange={(e) => setSpCategory(e.target.value as SetPieceCategory)}
+              >
+                {SET_PIECE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{SET_PIECE_CATEGORY_LABELS[c]}</option>
+                ))}
+              </select>
+              <div className="flex gap-1">
+                {(["attacking", "defending"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSpSide(s)}
+                    className={`flex-1 rounded-lg border py-1.5 text-xs font-medium ${
+                      spSide === s ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600"
+                    }`}
+                  >
+                    {SET_PIECE_SIDE_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <input
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base"
+              placeholder="Titel, bv. 'Korte corner naar de rand'"
+              value={spTitle}
+              onChange={(e) => setSpTitle(e.target.value)}
+            />
+            <textarea
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base"
+              rows={2}
+              placeholder="Omschrijving (optioneel)"
+              value={spDescription}
+              onChange={(e) => setSpDescription(e.target.value)}
+            />
+            <button
+              onClick={submitSetPiece}
+              disabled={spBusy || !spTitle.trim()}
+              className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 disabled:opacity-50"
+            >
+              {spBusy ? "Bezig…" : "Voorstel versturen"}
+            </button>
+            {spMsg && <div className="text-xs text-slate-600">{spMsg}</div>}
+          </div>
+
+          {data.setPieces.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jouw voorstellen</h3>
+              <div className="flex flex-col gap-1">
+                {data.setPieces.map((sp) => (
+                  <div key={sp.id} className="flex items-center justify-between text-xs text-slate-600">
+                    <span>{sp.title}</span>
+                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${sp.approved ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                      {sp.approved ? "goedgekeurd" : "voorgesteld"}
+                    </span>
                   </div>
                 ))}
               </div>
