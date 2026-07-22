@@ -3,9 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { formatDate, formatDateShort } from "@/lib/format";
+import { formatDate, formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
-import { Match, MatchStat, Player, VideoLink, VideoNote } from "@/lib/types";
+import { Absence, Match, MatchStat, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type StatDraft = Partial<{ goals: string; assists: string; minutes: string; rating: string }>;
@@ -56,6 +56,8 @@ function ResultatenPageInner() {
   const [stats, setStats] = useState<MatchStat[]>([]);
   const [videoLinks, setVideoLinks] = useState<VideoLink[]>([]);
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [absences, setAbsences] = useState<Absence[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedMatch, setSelectedMatch] = useState<string>("");
@@ -80,13 +82,17 @@ function ResultatenPageInner() {
       api.list("match_stats"),
       api.list("video_links"),
       api.list("video_notes"),
+      api.list("schedule_items"),
+      api.list("absences"),
     ])
-      .then(([p, m, s, v, n]) => {
+      .then(([p, m, s, v, n, si, a]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setMatches([...m].sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`)));
         setStats(s);
         setVideoLinks(v);
         setVideoNotes(n);
+        setScheduleItems(si);
+        setAbsences(a);
       })
       .finally(() => setLoading(false));
 
@@ -183,6 +189,25 @@ function ResultatenPageInner() {
     .map((p) => ({ player: p, t: totals.get(p.id) }))
     .filter((r) => r.t)
     .sort((a, b) => (b.t!.goals - a.t!.goals) || (b.t!.assists - a.t!.assists));
+
+  // ---------- Trainingsaanwezigheid (alleen zichtbaar voor staf) ----------
+
+  const trainingAttendance = useMemo(() => {
+    const today = todayIso();
+    const pastTrainings = scheduleItems.filter(
+      (i) => i.activity.toLowerCase().includes("training") && i.date <= today
+    );
+    return activePlayers
+      .map((p) => {
+        const total = pastTrainings.length;
+        const missed = pastTrainings.filter((t) =>
+          absences.some((a) => a.player_id === p.id && t.date >= a.from && t.date <= a.until)
+        ).length;
+        const attended = total - missed;
+        return { player: p, total, attended, pct: total > 0 ? (attended / total) * 100 : null };
+      })
+      .sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100));
+  }, [scheduleItems, absences, activePlayers]);
 
   const record = useMemo(() => {
     let wins = 0;
@@ -366,6 +391,47 @@ function ResultatenPageInner() {
           </div>
         )}
       </Card>
+
+      {canEdit && (
+        <Card className="mb-6">
+          <h2 className="mb-1 font-semibold">Trainingsaanwezigheid</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Op basis van de seizoensplanning (activiteiten met &quot;training&quot;) en geregistreerde afwezigheid. Alleen voor jou zichtbaar.
+          </p>
+          {trainingAttendance.every((r) => r.total === 0) ? (
+            <p className="text-sm text-slate-500">Nog geen trainingen geweest.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className={thCls}>Speler</th>
+                    <th className={thCls}>Aanwezig</th>
+                    <th className={thCls}>Percentage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trainingAttendance.map((r) => (
+                    <tr key={r.player.id} className="border-b border-slate-100">
+                      <td className={`${tdCls} font-medium`}>{r.player.name}</td>
+                      <td className={tdCls}>{r.attended} / {r.total}</td>
+                      <td className={tdCls}>
+                        {r.pct === null ? (
+                          "—"
+                        ) : (
+                          <Badge color={r.pct >= 90 ? "green" : r.pct >= 70 ? "amber" : "red"}>
+                            {r.pct.toFixed(0)}%
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">Per wedstrijd</h2>
