@@ -88,8 +88,24 @@ function drawArrowHead(ctx: CanvasRenderingContext2D, a: { x: number; y: number 
   ctx.fill();
 }
 
-function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "line" }>) {
+function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "line" }>, selected?: boolean) {
   if (el.points.length === 0) return;
+
+  if (selected) {
+    // Brede gele halo onder de lijn, zodat een geselecteerde looplijn/pass
+    // net zo duidelijk gemarkeerd is als een geselecteerde speler/bal.
+    ctx.save();
+    ctx.strokeStyle = "#eab308";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    el.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.strokeStyle = el.color;
   ctx.fillStyle = el.color;
   ctx.lineWidth = 3;
@@ -182,7 +198,7 @@ function drawBall(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { k
 }
 
 function drawElement(ctx: CanvasRenderingContext2D, el: DrawingElement, selected?: boolean) {
-  if (el.kind === "line") drawLine(ctx, el);
+  if (el.kind === "line") drawLine(ctx, el, selected);
   else if (el.kind === "player") drawPlayer(ctx, el, selected);
   else drawBall(ctx, el, selected);
 }
@@ -197,10 +213,37 @@ function renderBoard(canvas: HTMLCanvasElement, elements: DrawingElement[], sele
   if (preview) drawElement(ctx, preview);
 }
 
-function findTokenAt(elements: DrawingElement[], p: { x: number; y: number }): number | null {
+const LINE_HIT_TOLERANCE = 10;
+
+function pointToSegmentDistance(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+function distanceToLine(p: { x: number; y: number }, points: { x: number; y: number }[]): number {
+  if (points.length === 0) return Infinity;
+  if (points.length === 1) return Math.hypot(p.x - points[0].x, p.y - points[0].y);
+  let min = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    min = Math.min(min, pointToSegmentDistance(p, points[i], points[i + 1]));
+  }
+  return min;
+}
+
+// Vindt het bovenste element (speler, bal, of lijn/pass/looplijn) onder het klikpunt,
+// zodat alle soorten symbolen — niet alleen spelers/bal — aangeklikt en geselecteerd
+// kunnen worden om ze gericht te verwijderen.
+function findElementAt(elements: DrawingElement[], p: { x: number; y: number }): number | null {
   for (let i = elements.length - 1; i >= 0; i--) {
     const el = elements[i];
-    if (el.kind === "line") continue;
+    if (el.kind === "line") {
+      if (distanceToLine(p, el.points) <= LINE_HIT_TOLERANCE) return i;
+      continue;
+    }
     const r = el.kind === "ball" ? BALL_R : TOKEN_R;
     if (Math.hypot(el.x - p.x, el.y - p.y) <= r + 4) return i;
   }
@@ -254,13 +297,15 @@ export function TacticsBoardEditor({
     const p = pointFromEvent(e);
     (e.target as Element).setPointerCapture(e.pointerId);
 
-    const hit = findTokenAt(elements, p);
+    const hit = findElementAt(elements, p);
     if (hit !== null) {
       const el = elements[hit];
-      const tx = el.kind === "line" ? 0 : el.x;
-      const ty = el.kind === "line" ? 0 : el.y;
-      drag.current = { kind: "move", index: hit, offsetX: p.x - tx, offsetY: p.y - ty };
       setSelectedIndex(hit);
+      // Lijnen (pass/looplijn/dribbel/vrij tekenen) zijn alleen te selecteren
+      // en verwijderen, niet te verslepen — alleen spelers/bal hebben een x/y.
+      if (el.kind !== "line") {
+        drag.current = { kind: "move", index: hit, offsetX: p.x - el.x, offsetY: p.y - el.y };
+      }
       return;
     }
 
@@ -315,6 +360,25 @@ export function TacticsBoardEditor({
     onChange(elements.filter((_, i) => i !== selectedIndex));
     setSelectedIndex(null);
   }
+
+  // Delete/Backspace verwijdert het geselecteerde symbool — niet alleen via de
+  // knop hieronder. Genegeerd terwijl er in een tekstveld getypt wordt (bv.
+  // het rugnummer-veld), zodat normaal bewerken niet per ongeluk een symbool wist.
+  useEffect(() => {
+    if (selectedIndex === null) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeSelected();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex, elements]);
 
   function undo() {
     onChange(elements.slice(0, -1));

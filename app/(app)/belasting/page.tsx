@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
-import { Absence, LoadEntry, Match, Message as ChatMessage, Player, ScheduleItem } from "@/lib/types";
+import { Absence, LoadEntry, Match, Player, ScheduleItem } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type LoadDraft = {
@@ -24,7 +24,6 @@ type LoadDraft = {
 
 const EMPTY_DRAFT: LoadDraft = { minutes: "", rpe: "", fatigue: "", soreness: "", injuryFlag: false, notes: "", absent: false };
 
-const STAFF_SENDER_NAME = "Staf";
 const CHART_COLORS = [
   "#059669", "#dc2626", "#2563eb", "#d97706", "#7c3aed",
   "#db2777", "#0891b2", "#65a30d", "#ea580c", "#4f46e5",
@@ -43,7 +42,6 @@ export default function BelastingPage() {
   const canEdit = useCanEdit();
   const [players, setPlayers] = useState<Player[]>([]);
   const [entries, setEntries] = useState<LoadEntry[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -56,23 +54,20 @@ export default function BelastingPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [chatPlayer, setChatPlayer] = useState<string>("");
-  const [chatBody, setChatBody] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
+  const [showRawEntries, setShowRawEntries] = useState(false);
+  const [correctionSession, setCorrectionSession] = useState("");
 
   const reload = () =>
     Promise.all([
       api.list("players"),
       api.list("load_entries"),
-      api.list("messages"),
       api.list("schedule_items"),
       api.list("matches"),
       api.list("absences"),
     ])
-      .then(([p, e, m, si, ma, ab]) => {
+      .then(([p, e, si, ma, ab]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setEntries(e);
-        setMessages(m);
         setScheduleItems(si);
         setMatches(ma);
         setAbsences(ab);
@@ -232,24 +227,6 @@ export default function BelastingPage() {
     await reload();
   }
 
-  async function sendStaffMessage() {
-    if (!chatPlayer || !chatBody.trim()) return;
-    setChatBusy(true);
-    try {
-      await api.create("messages", {
-        player_id: chatPlayer,
-        sender: "staff",
-        sender_name: STAFF_SENDER_NAME,
-        body: chatBody.trim(),
-        created_at: new Date().toISOString(),
-      });
-      setChatBody("");
-      await reload();
-    } finally {
-      setChatBusy(false);
-    }
-  }
-
   // Meest recente invoer per speler (voor het teamoverzicht bovenaan)
   const latestByPlayer = useMemo(() => {
     const map = new Map<string, LoadEntry>();
@@ -367,10 +344,23 @@ export default function BelastingPage() {
       });
   }, [entries, selectedPlayerIds]);
 
-  const playerEntries = entries
-    .filter((e) => selectedPlayerIds.includes(e.player_id))
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 20);
+  // Alle sessies (datum + type) waar minstens één invoer voor bestaat, nieuwste eerst —
+  // basis voor de sessiekiezer bij de ruwe invoer (corrigeren), los van de speler-selectie
+  // die hierboven voor de trendgrafiek gebruikt wordt.
+  const sessionOptions = useMemo(() => {
+    const map = new Map<string, { date: string; session_type: "training" | "wedstrijd"; count: number }>();
+    for (const e of entries) {
+      const key = `${e.date}|${e.session_type}`;
+      const cur = map.get(key);
+      if (cur) cur.count += 1;
+      else map.set(key, { date: e.date, session_type: e.session_type, count: 1 });
+    }
+    return [...map.values()].sort((a, b) => b.date.localeCompare(a.date));
+  }, [entries]);
+
+  const correctionEntries = entries
+    .filter((e) => `${e.date}|${e.session_type}` === correctionSession)
+    .sort((a, b) => (players.find((p) => p.id === a.player_id)?.name ?? "").localeCompare(players.find((p) => p.id === b.player_id)?.name ?? "", "nl"));
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
@@ -589,122 +579,90 @@ export default function BelastingPage() {
           </>
         )}
 
-        {playerEntries.length > 0 && (
-          <div className="mt-6 overflow-x-auto">
-            <h3 className="mb-2 text-sm font-semibold text-slate-600">Laatste registraties</h3>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className={thCls}>Speler</th>
-                  <th className={thCls}>Datum</th>
-                  <th className={thCls}>Type</th>
-                  <th className={thCls}>Minuten</th>
-                  <th className={thCls}>RPE</th>
-                  <th className={thCls}>Belasting</th>
-                  <th className={thCls}>Vermoeidheid</th>
-                  <th className={thCls}>Spierpijn</th>
-                  <th className={thCls}>Blessure</th>
-                  <th className={thCls}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {playerEntries.map((e) => (
-                  <tr key={e.id} className={`border-b border-slate-100 ${e.absent ? "opacity-60" : ""}`}>
-                    <td className={`${tdCls} font-medium`}>{players.find((p) => p.id === e.player_id)?.name ?? "—"}</td>
-                    <td className={tdCls}>{e.date}</td>
-                    <td className={tdCls}>{e.session_type}</td>
-                    {e.absent ? (
-                      <td className={tdCls} colSpan={5}>
-                        <Badge color="slate">🚫 Afwezig</Badge>
-                      </td>
-                    ) : (
-                      <>
-                        <td className={tdCls}>{e.minutes}</td>
-                        <td className={tdCls}>{e.rpe}</td>
-                        <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
-                        <td className={tdCls}>{e.fatigue ? <ScaleBadge value={e.fatigue} lowIsBad /> : "—"}</td>
-                        <td className={tdCls}>{e.soreness ? <ScaleBadge value={e.soreness} lowIsBad /> : "—"}</td>
+        {sessionOptions.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowRawEntries((v) => !v)}
+              className="flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-rose-600"
+            >
+              <span className={`text-xs transition-transform ${showRawEntries ? "rotate-90" : ""}`} aria-hidden>›</span>
+              Ruwe invoer per sessie (voor correcties)
+            </button>
+            {showRawEntries && (
+            <div className="mt-2">
+              <select
+                className={`${inputCls} w-full max-w-md`}
+                value={correctionSession}
+                onChange={(e) => setCorrectionSession(e.target.value)}
+              >
+                <option value="">— Kies een sessie —</option>
+                {sessionOptions.map((o) => (
+                  <option key={`${o.date}|${o.session_type}`} value={`${o.date}|${o.session_type}`}>
+                    {o.date} — {o.session_type} ({o.count} invoer{o.count === 1 ? "" : "en"})
+                  </option>
+                ))}
+              </select>
+
+              {correctionSession && (
+                <div className="mt-3 overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className={thCls}>Speler</th>
+                      <th className={thCls}>Minuten</th>
+                      <th className={thCls}>RPE</th>
+                      <th className={thCls}>Belasting</th>
+                      <th className={thCls}>Vermoeidheid</th>
+                      <th className={thCls}>Spierpijn</th>
+                      <th className={thCls}>Blessure</th>
+                      <th className={thCls}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correctionEntries.map((e) => (
+                      <tr key={e.id} className={`border-b border-slate-100 ${e.absent ? "opacity-60" : ""}`}>
+                        <td className={`${tdCls} font-medium`}>{players.find((p) => p.id === e.player_id)?.name ?? "—"}</td>
+                        {e.absent ? (
+                          <td className={tdCls} colSpan={5}>
+                            <Badge color="slate">🚫 Afwezig</Badge>
+                          </td>
+                        ) : (
+                          <>
+                            <td className={tdCls}>{e.minutes}</td>
+                            <td className={tdCls}>{e.rpe}</td>
+                            <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
+                            <td className={tdCls}>{e.fatigue ? <ScaleBadge value={e.fatigue} lowIsBad /> : "—"}</td>
+                            <td className={tdCls}>{e.soreness ? <ScaleBadge value={e.soreness} lowIsBad /> : "—"}</td>
+                            <td className={tdCls}>
+                              {e.injury_flag ? (
+                                <div>
+                                  <Badge color="red">⚠️</Badge>
+                                  {e.notes && <div className="mt-1 max-w-[200px] text-xs text-red-700">{e.notes}</div>}
+                                </div>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          </>
+                        )}
                         <td className={tdCls}>
-                          {e.injury_flag ? (
-                            <div>
-                              <Badge color="red">⚠️</Badge>
-                              {e.notes && <div className="mt-1 max-w-[200px] text-xs text-red-700">{e.notes}</div>}
-                            </div>
-                          ) : (
-                            "—"
+                          {canEdit && (
+                            <button className="text-xs text-red-500 hover:underline" onClick={() => removeEntry(e)}>
+                              verwijderen
+                            </button>
                           )}
                         </td>
-                      </>
-                    )}
-                    <td className={tdCls}>
-                      {canEdit && (
-                        <button className="text-xs text-red-500 hover:underline" onClick={() => removeEntry(e)}>
-                          verwijderen
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              )}
+            </div>
+            )}
           </div>
         )}
       </Card>
-
-      {canEdit && (
-      <Card className="mt-6">
-        <h2 className="mb-1 font-semibold">Berichten met spelers 💬</h2>
-        <p className="mb-3 text-xs text-slate-500">
-          Spelers kunnen via hun mobiele invulscherm berichten sturen; hier lees en beantwoord je ze per speler.
-        </p>
-        <select className={`${inputCls} mb-4 w-full max-w-md`} value={chatPlayer} onChange={(e) => setChatPlayer(e.target.value)}>
-          <option value="">— Kies een speler —</option>
-          {players.map((p) => {
-            const count = messages.filter((m) => m.player_id === p.id).length;
-            return (
-              <option key={p.id} value={p.id}>
-                {p.name}{count > 0 ? ` (${count})` : ""}
-              </option>
-            );
-          })}
-        </select>
-
-        {chatPlayer && (
-          <>
-            <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
-              {messages.filter((m) => m.player_id === chatPlayer).length === 0 && (
-                <p className="text-sm text-slate-500">Nog geen berichten met deze speler.</p>
-              )}
-              {messages
-                .filter((m) => m.player_id === chatPlayer)
-                .sort((a, b) => a.created_at.localeCompare(b.created_at))
-                .map((m) => (
-                  <div key={m.id} className={`flex ${m.sender === "staff" ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                        m.sender === "staff" ? "bg-rose-600 text-white" : "bg-white border border-slate-200"
-                      }`}
-                    >
-                      {m.sender === "player" && <div className="mb-0.5 text-xs font-semibold opacity-70">{m.sender_name}</div>}
-                      {m.body}
-                    </div>
-                  </div>
-                ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                className={`${inputCls} flex-1`}
-                placeholder="Typ een bericht…"
-                value={chatBody}
-                onChange={(e) => setChatBody(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendStaffMessage()}
-              />
-              <Button onClick={sendStaffMessage} disabled={chatBusy || !chatBody.trim()}>Stuur</Button>
-            </div>
-          </>
-        )}
-      </Card>
-      )}
     </div>
   );
 }

@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* De rest van de app (kaarten, koppen, tabellen) is niet dark-mode-bewust —
+     alleen deze twee variabelen omdraaien voor donkere systeemthema's gaf een
+     kapotte mix van licht en donker (vervaagde koppen, "verdwijnende" witte
+     kaarten). Geef daarom expliciet aan dat de app alleen een licht thema
+     ondersteunt, zodat de telefoon/browser niet zelf kleuren gaat omdraaien. */
+  color-scheme: light;
 }
 
 @theme inline {
@@ -20,13 +26,6 @@
   --text-xs--line-height: 1.25rem;
   --text-sm: 0.9375rem; /* 15px */
   --text-sm--line-height: 1.4rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

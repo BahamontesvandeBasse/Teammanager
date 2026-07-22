@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Teammanager — Sv Steenwijkerwold JO19-1",
   description: "Digitale assistent-trainer voor Sv Steenwijkerwold JO19-1",
+};
+
+// De app is (nog) alleen ontworpen met een licht thema — dit voorkomt dat
+// telefoons/browsers met systeem-donkere-modus zelf kleuren gaan omdraaien,
+// wat koppen en kaarten onleesbaar vervaagde.
+export const viewport: Viewport = {
+  colorScheme: "light",
 };
 
 export default function RootLayout({

@@ -15,10 +15,11 @@ import {
   SetPieceCategory,
   SetPieceSide,
 } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 export default function SpelhervattingenPage() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const [setPieces, setSetPieces] = useState<SetPiece[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,13 @@ export default function SpelhervattingenPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [drawing, setDrawing] = useState<DrawingElement[]>([]);
+
+  const [suggestCategory, setSuggestCategory] = useState<SetPieceCategory>(SET_PIECE_CATEGORIES[0]);
+  const [suggestSide, setSuggestSide] = useState<SetPieceSide>("attacking");
+  const [suggestTitle, setSuggestTitle] = useState("");
+  const [suggestDescription, setSuggestDescription] = useState("");
+  const [suggestDrawing, setSuggestDrawing] = useState<DrawingElement[]>([]);
+  const [suggestBusy, setSuggestBusy] = useState(false);
 
   const reload = () =>
     Promise.all([api.list("set_pieces"), api.list("players")])
@@ -74,6 +82,43 @@ export default function SpelhervattingenPage() {
     } catch (e) {
       setMsg((e as Error).message);
       setErr(true);
+    }
+  }
+
+  async function submitSuggestion() {
+    if (!suggestTitle.trim()) {
+      setMsg("Vul een titel in.");
+      setErr(true);
+      return;
+    }
+    setSuggestBusy(true);
+    try {
+      const res = await fetch("/api/set-pieces/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: suggestCategory,
+          side: suggestSide,
+          title: suggestTitle.trim(),
+          description: suggestDescription.trim(),
+          drawing: suggestDrawing,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? "Versturen mislukt");
+      }
+      setSuggestTitle("");
+      setSuggestDescription("");
+      setSuggestDrawing([]);
+      await reload();
+      setMsg("Bedankt! De staf bekijkt je voorstel.");
+      setErr(false);
+    } catch (e) {
+      setMsg((e as Error).message);
+      setErr(true);
+    } finally {
+      setSuggestBusy(false);
     }
   }
 
@@ -197,6 +242,70 @@ export default function SpelhervattingenPage() {
               </div>
               <div className="mt-1">
                 <Button onClick={add}>Toevoegen aan bank</Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {role === "speler" && (
+        <Card className="mb-6">
+          <h2 className="mb-1 font-semibold">Stel een spelhervatting voor</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Heb je een idee voor een corner, vrije trap, aftrap, inworp of keeperbal? De staf bekijkt je voorstel en keurt goed.
+          </p>
+          <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Tekenen (optioneel)</label>
+              <TacticsBoardEditor elements={suggestDrawing} onChange={setSuggestDrawing} />
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Categorie</label>
+                <select
+                  className={`${inputCls} w-full`}
+                  value={suggestCategory}
+                  onChange={(e) => setSuggestCategory(e.target.value as SetPieceCategory)}
+                >
+                  {SET_PIECE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{SET_PIECE_CATEGORY_LABELS[c]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Aanvallen of verdedigen</label>
+                <div className="flex gap-2">
+                  {SET_PIECE_SIDES.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSuggestSide(s)}
+                      className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                        suggestSide === s ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600"
+                      }`}
+                    >
+                      {SET_PIECE_SIDE_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Titel</label>
+                <input className={`${inputCls} w-full`} value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Omschrijving</label>
+                <textarea
+                  className={`${inputCls} w-full`}
+                  rows={3}
+                  placeholder="Wie staat waar, wie neemt 'm, looplijnen…"
+                  value={suggestDescription}
+                  onChange={(e) => setSuggestDescription(e.target.value)}
+                />
+              </div>
+              <div className="mt-1">
+                <Button onClick={submitSuggestion} disabled={suggestBusy}>
+                  {suggestBusy ? "Bezig…" : "Voorstel versturen"}
+                </Button>
               </div>
             </div>
           </div>
