@@ -987,7 +987,7 @@ function WedstrijdenPageInner() {
                         <th className={thCls}>Minuten</th>
                         <th className={thCls}>Goals</th>
                         <th className={thCls}>Assists</th>
-                        <th className={thCls}>Beoordeling (1-10)</th>
+                        {canEdit && <th className={thCls}>Beoordeling (1-10)</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1030,17 +1030,19 @@ function WedstrijdenPageInner() {
                                 onBlur={(e) => e.target.value !== String(s?.assists || "") && saveStat(p.id, "assists", e.target.value)}
                               />
                             </td>
-                            <td className={tdCls}>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10}
-                                className={`${inputCls} w-20`}
-                                defaultValue={s?.rating ?? ""}
-                                placeholder="—"
-                                onBlur={(e) => e.target.value !== String(s?.rating ?? "") && saveStat(p.id, "rating", e.target.value)}
-                              />
-                            </td>
+                            {canEdit && (
+                              <td className={tdCls}>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10}
+                                  className={`${inputCls} w-20`}
+                                  defaultValue={s?.rating ?? ""}
+                                  placeholder="—"
+                                  onBlur={(e) => e.target.value !== String(s?.rating ?? "") && saveStat(p.id, "rating", e.target.value)}
+                                />
+                              </td>
+                            )}
                           </tr>
                         );
                       })}

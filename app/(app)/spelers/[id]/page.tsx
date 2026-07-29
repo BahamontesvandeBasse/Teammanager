@@ -289,7 +289,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             <span><span className="font-semibold">{totals.minutes}</span> minuten</span>
             <span><span className="font-semibold">{totals.goals}</span> goals</span>
             <span><span className="font-semibold">{totals.assists}</span> assists</span>
-            <span><span className="font-semibold">{avgRating !== null ? avgRating.toFixed(1) : "—"}</span> gem. beoordeling</span>
+            {canEdit && (
+              <span><span className="font-semibold">{avgRating !== null ? avgRating.toFixed(1) : "—"}</span> beoordeling</span>
+            )}
           </div>
           <div className="mb-4 grid gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3">
             <span>

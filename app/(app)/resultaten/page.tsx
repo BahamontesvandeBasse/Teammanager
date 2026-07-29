@@ -371,7 +371,7 @@ function ResultatenPageInner() {
                   <th className={thCls}>Minuten</th>
                   <th className={thCls}>Goals ⚽</th>
                   <th className={thCls}>Assists 🎯</th>
-                  <th className={thCls}>Gem. beoordeling</th>
+                  {canEdit && <th className={thCls}>Beoordeling</th>}
                 </tr>
               </thead>
               <tbody>
@@ -383,7 +383,9 @@ function ResultatenPageInner() {
                     <td className={tdCls}>{r.t!.minutes}</td>
                     <td className={`${tdCls} font-semibold`}>{r.t!.goals}</td>
                     <td className={tdCls}>{r.t!.assists}</td>
-                    <td className={tdCls}>{r.t!.ratingCount > 0 ? (r.t!.ratingSum / r.t!.ratingCount).toFixed(1) : "—"}</td>
+                    {canEdit && (
+                      <td className={tdCls}>{r.t!.ratingCount > 0 ? (r.t!.ratingSum / r.t!.ratingCount).toFixed(1) : "—"}</td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -497,7 +499,7 @@ function ResultatenPageInner() {
                     <th className={thCls}>Minuten</th>
                     <th className={thCls}>Goals</th>
                     <th className={thCls}>Assists</th>
-                    <th className={thCls}>Beoordeling (1-10)</th>
+                    {canEdit && <th className={thCls}>Beoordeling (1-10)</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -535,17 +537,19 @@ function ResultatenPageInner() {
                           onChange={(e) => setDraft(p.id, "assists", e.target.value)}
                         />
                       </td>
-                      <td className={tdCls}>
-                        <input
-                          type="number"
-                          min={1}
-                          max={10}
-                          className={`${inputCls} w-20`}
-                          value={fieldValue(p.id, "rating")}
-                          placeholder="—"
-                          onChange={(e) => setDraft(p.id, "rating", e.target.value)}
-                        />
-                      </td>
+                      {canEdit && (
+                        <td className={tdCls}>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            className={`${inputCls} w-20`}
+                            value={fieldValue(p.id, "rating")}
+                            placeholder="—"
+                            onChange={(e) => setDraft(p.id, "rating", e.target.value)}
+                          />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
