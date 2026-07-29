@@ -411,12 +411,25 @@ export default function SpelhervattingenPage() {
       {SET_PIECE_CATEGORIES.map((cat) => {
         const inCategory = approved.filter((sp) => sp.category === cat);
         if (inCategory.length === 0) return null;
+        // Het bewerkformulier (met tekenbord) heeft de volle kaartbreedte nodig — in de
+        // smalle aanvallen/verdedigen-kolom naast elkaar past de tekentool niet fatsoenlijk.
+        // Daarom staat het item dat bewerkt wordt hier los boven de tweekoloms-lijst.
+        const editingInCategory = inCategory.find((sp) => sp.id === editingId);
         return (
           <Card key={cat} className="mb-6">
             <h2 className="mb-3 font-semibold">{SET_PIECE_CATEGORY_LABELS[cat]}</h2>
+            {editingInCategory && (
+              <div className="mb-4">
+                <SetPieceEditForm
+                  sp={editingInCategory}
+                  onSave={(patch) => saveEdit(editingInCategory, patch)}
+                  onCancel={() => setEditingId(null)}
+                />
+              </div>
+            )}
             <div className="grid gap-6 sm:grid-cols-2">
               {SET_PIECE_SIDES.map((s) => {
-                const items = inCategory.filter((sp) => sp.side === s);
+                const items = inCategory.filter((sp) => sp.side === s && sp.id !== editingId);
                 return (
                   <div key={s}>
                     <h3 className="mb-2 text-sm font-semibold text-slate-700">{SET_PIECE_SIDE_LABELS[s]}</h3>
@@ -424,15 +437,7 @@ export default function SpelhervattingenPage() {
                       <p className="text-xs text-slate-500">Nog geen spelhervattingen.</p>
                     ) : (
                       <div className="flex flex-col gap-2">
-                        {items.map((sp) =>
-                          editingId === sp.id ? (
-                            <SetPieceEditForm
-                              key={sp.id}
-                              sp={sp}
-                              onSave={(patch) => saveEdit(sp, patch)}
-                              onCancel={() => setEditingId(null)}
-                            />
-                          ) : (
+                        {items.map((sp) => (
                             <div key={sp.id} className="rounded-lg border border-slate-200 p-3">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="font-medium">{sp.title}</div>
@@ -457,8 +462,7 @@ export default function SpelhervattingenPage() {
                                 </div>
                               )}
                             </div>
-                          )
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>
