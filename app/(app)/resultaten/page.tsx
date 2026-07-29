@@ -368,7 +368,7 @@ function ResultatenPageInner() {
                   <th className={thCls}>#</th>
                   <th className={thCls}>Speler</th>
                   <th className={thCls}>Wedstrijden</th>
-                  <th className={thCls}>Minuten</th>
+                  {canEdit && <th className={thCls}>Minuten</th>}
                   <th className={thCls}>Goals ⚽</th>
                   <th className={thCls}>Assists 🎯</th>
                   {canEdit && <th className={thCls}>Beoordeling</th>}
@@ -380,7 +380,7 @@ function ResultatenPageInner() {
                     <td className={tdCls}>{i + 1}</td>
                     <td className={`${tdCls} font-medium`}>{r.player.name}</td>
                     <td className={tdCls}>{r.t!.games}</td>
-                    <td className={tdCls}>{r.t!.minutes}</td>
+                    {canEdit && <td className={tdCls}>{r.t!.minutes}</td>}
                     <td className={`${tdCls} font-semibold`}>{r.t!.goals}</td>
                     <td className={tdCls}>{r.t!.assists}</td>
                     {canEdit && (
@@ -496,7 +496,7 @@ function ResultatenPageInner() {
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className={thCls}>Speler</th>
-                    <th className={thCls}>Minuten</th>
+                    {canEdit && <th className={thCls}>Minuten</th>}
                     <th className={thCls}>Goals</th>
                     <th className={thCls}>Assists</th>
                     {canEdit && <th className={thCls}>Beoordeling (1-10)</th>}
@@ -506,17 +506,19 @@ function ResultatenPageInner() {
                   {activePlayers.map((p) => (
                     <tr key={p.id} className="border-b border-slate-100">
                       <td className={`${tdCls} font-medium`}>{p.name}</td>
-                      <td className={tdCls}>
-                        <input
-                          type="number"
-                          min={0}
-                          max={130}
-                          className={`${inputCls} w-20`}
-                          value={fieldValue(p.id, "minutes")}
-                          placeholder="0"
-                          onChange={(e) => setDraft(p.id, "minutes", e.target.value)}
-                        />
-                      </td>
+                      {canEdit && (
+                        <td className={tdCls}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={130}
+                            className={`${inputCls} w-20`}
+                            value={fieldValue(p.id, "minutes")}
+                            placeholder="0"
+                            onChange={(e) => setDraft(p.id, "minutes", e.target.value)}
+                          />
+                        </td>
+                      )}
                       <td className={tdCls}>
                         <input
                           type="number"

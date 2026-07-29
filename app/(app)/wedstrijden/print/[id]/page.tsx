@@ -20,11 +20,17 @@ import {
   TacticalMomentNotes,
 } from "@/lib/types";
 
-const TACTICAL_MOMENTS: { key: TacticalMoment; label: string }[] = [
+const TEAM_MOMENTS: { key: TacticalMoment; label: string }[] = [
   { key: "attacking", label: "Aanvallen" },
   { key: "defending", label: "Verdedigen" },
   { key: "transition_to_attack", label: "Omschakelen naar aanval" },
   { key: "transition_to_defense", label: "Omschakelen naar verdedigen" },
+];
+
+// Geen omschakelmomenten op linie-niveau, zie ook de wedstrijdvoorbereiding-editor.
+const LINE_MOMENTS: { key: TacticalMoment; label: string }[] = [
+  { key: "attacking", label: "Aanvallen" },
+  { key: "defending", label: "Verdedigen" },
 ];
 
 const LINES: { key: Line; label: string }[] = [
@@ -33,9 +39,9 @@ const LINES: { key: Line; label: string }[] = [
   { key: "aanval", label: "Aanval" },
 ];
 
-function filledMoments(m: TacticalMomentNotes | undefined) {
+function filledMoments(m: TacticalMomentNotes | undefined, moments: { key: TacticalMoment; label: string }[]) {
   if (!m) return [];
-  return TACTICAL_MOMENTS.filter((mo) => m[mo.key]?.trim());
+  return moments.filter((mo) => m[mo.key]?.trim());
 }
 
 export default function PrintPreparationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -84,7 +90,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     .map((pid) => players.find((p) => p.id === pid)?.name)
     .filter(Boolean) as string[];
 
-  const teamMoments = filledMoments(prep?.tactical_notes?.team);
+  const teamMoments = filledMoments(prep?.tactical_notes?.team, TEAM_MOMENTS);
   const drawings = prep?.drawings ?? {};
   const chosenSetPieces = setPieces.filter((sp) => prep?.set_piece_ids?.includes(sp.id));
   const absentPlayerIds = new Set(
@@ -213,7 +219,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
             )}
 
             {LINES.map((line) => {
-              const moments = filledMoments(prep.tactical_notes?.line?.[line.key]);
+              const moments = filledMoments(prep.tactical_notes?.line?.[line.key], LINE_MOMENTS);
               const lineDrawing = drawings[`line:${line.key}`];
               if (moments.length === 0 && (!lineDrawing || lineDrawing.length === 0)) return null;
               return (

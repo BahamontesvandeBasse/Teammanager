@@ -27,6 +27,16 @@ export async function getRealRole(): Promise<Role> {
 }
 
 /**
+ * De player-rij gekoppeld aan het ingelogde account (alleen relevant voor
+ * "speler"-accounts) — gebruikt om spelers te beperken tot hun eigen profiel.
+ */
+export async function getSessionPlayerId(): Promise<string | null> {
+  if (!neonConfigured()) return null;
+  const session = await auth();
+  return session?.user?.playerId ?? null;
+}
+
+/**
  * Bepaalt de effectieve rol van de huidige request: de echte rol, tenzij de
  * beheerder via de "bekijk als"-schakelaar tijdelijk een andere rol simuleert
  * (cookie VIEW_AS_COOKIE) — zo kan de beheerder precies zien wat een staf/
@@ -50,14 +60,23 @@ const TODAY = () => new Date().toISOString().slice(0, 10);
 
 /**
  * Redigeert/filtert rijen op basis van de rol van de aanvrager:
- * - "speler" en "toeschouwer" zien geen beoordelingen (match_stats.rating).
+ * - "speler" en "toeschouwer" zien geen beoordelingen of gespeelde minuten
+ *   (match_stats.rating / minutes_played) — niet van zichzelf, en niet van
+ *   teamgenoten. minutes_played wordt niet naar null gezet maar naar 0/1,
+ *   zodat afgeleide "aantal wedstrijden gespeeld"-tellingen (die controleren
+ *   op minutes_played > 0) elders in de app correct blijven werken zonder de
+ *   echte minuten prijs te geven.
  * - "speler" ziet daarnaast wedstrijdvoorbereiding pas nadat de wedstrijd is gespeeld.
  */
 export async function redactForRole(entity: EntityName, rows: Row[], role: Role): Promise<Row[]> {
   if (role !== "speler" && role !== "toeschouwer") return rows;
 
   if (entity === "match_stats") {
-    return rows.map((r) => ({ ...r, rating: null }));
+    return rows.map((r) => ({
+      ...r,
+      rating: null,
+      minutes_played: (r.minutes_played as number) > 0 ? 1 : 0,
+    }));
   }
 
   if (role !== "speler") return rows;

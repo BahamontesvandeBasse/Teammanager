@@ -435,8 +435,8 @@ export default function PlayerCheckinPage({ params }: { params: Promise<{ token:
             <h2 className="font-semibold">Gevoel na de training</h2>
           </div>
 
-          <ScaleField label="Vermoeidheid" value={fatigue} onChange={setFatigue} count={10} renderLabel={(i) => String(i)} caption="moe · fris" />
-          <ScaleField label="Spierpijn" value={soreness} onChange={setSoreness} count={10} renderLabel={(i) => String(i)} caption="veel pijn · niks" last />
+          <ScaleField label="Vermoeidheid" value={fatigue} onChange={setFatigue} count={10} renderLabel={(i) => String(i)} caption="1 = heel licht · 10 = maximaal" />
+          <ScaleField label="Spierpijn" value={soreness} onChange={setSoreness} count={10} renderLabel={(i) => String(i)} caption="1 = heel licht · 10 = maximaal" last />
         </section>
 
         <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

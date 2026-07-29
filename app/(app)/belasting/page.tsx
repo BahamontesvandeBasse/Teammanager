@@ -265,7 +265,8 @@ export default function BelastingPage() {
 
         const change = prevWeek > 0 ? ((thisWeek - prevWeek) / prevWeek) * 100 : thisWeek > 0 ? 100 : 0;
         const latest = latestByPlayer.get(p.id);
-        const lowRecovery = (latest?.fatigue && latest.fatigue <= 4) || (latest?.soreness && latest.soreness <= 4);
+        // Schaal is net als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht herstel.
+        const lowRecovery = (latest?.fatigue && latest.fatigue >= 7) || (latest?.soreness && latest.soreness >= 7);
 
         const absenceStatus = playerAbsenceStatus(p.id, absences, today);
 
@@ -631,8 +632,8 @@ export default function BelastingPage() {
                             <td className={tdCls}>{e.minutes}</td>
                             <td className={tdCls}>{e.rpe}</td>
                             <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
-                            <td className={tdCls}>{e.fatigue ? <ScaleBadge value={e.fatigue} lowIsBad /> : "—"}</td>
-                            <td className={tdCls}>{e.soreness ? <ScaleBadge value={e.soreness} lowIsBad /> : "—"}</td>
+                            <td className={tdCls}>{e.fatigue ? <ScaleBadge value={e.fatigue} /> : "—"}</td>
+                            <td className={tdCls}>{e.soreness ? <ScaleBadge value={e.soreness} /> : "—"}</td>
                             <td className={tdCls}>
                               {e.injury_flag ? (
                                 <div>
@@ -667,8 +668,9 @@ export default function BelastingPage() {
   );
 }
 
-function ScaleBadge({ value, lowIsBad }: { value: number; lowIsBad?: boolean }) {
-  const bad = lowIsBad ? value <= 4 : value >= 7;
+// Zelfde richting als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht.
+function ScaleBadge({ value }: { value: number }) {
+  const bad = value >= 7;
   const ok = value >= 5 && value <= 6;
   return <Badge color={bad ? "red" : ok ? "amber" : "green"}>{value}/10</Badge>;
 }

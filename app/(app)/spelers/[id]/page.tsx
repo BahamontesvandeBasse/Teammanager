@@ -10,7 +10,7 @@ import { isTrainingActivity } from "@/lib/training";
 import { Badge, Button, Card, Message, PageTitle, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
 import { Absence, LoadEntry, Match, MatchStat, Message as ChatMessage, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -20,6 +20,8 @@ function formatTimestamp(seconds: number): string {
 
 export default function PlayerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const canEdit = useCanEdit();
+  const role = useRole();
+  const ownPlayerId = useOwnPlayerId();
   const { id } = use(params);
 
   const [player, setPlayer] = useState<Player | null>(null);
@@ -144,6 +146,15 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       </div>
     );
   }
+  // Spelers mogen alleen hun eigen profiel bekijken, niet dat van teamgenoten.
+  if (role === "speler" && ownPlayerId !== id) {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Je kunt alleen je eigen spelersprofiel bekijken." />
+        <Link href="/spelers" className="text-sm text-rose-600 hover:underline">← Terug naar Spelers</Link>
+      </div>
+    );
+  }
 
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const totals = stats.reduce(
@@ -252,58 +263,60 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         </p>
       </Card>
 
-      <Card>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold">AI-samenvatting</h2>
-          {canEdit && (
+      {canEdit && (
+        <Card>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">AI-samenvatting</h2>
             <Button onClick={generateSummary} disabled={generating || !hasData}>
               {generating ? "Bezig…" : player.ai_summary ? "Opnieuw genereren" : "Genereer samenvatting"}
             </Button>
-          )}
-        </div>
-        {!hasData && (
-          <p className="text-sm text-slate-500">
-            Nog geen statistieken, belastingdata of video-observaties voor deze speler.
-          </p>
-        )}
-        {player.ai_summary ? (
-          <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
-            {player.ai_summary}
-            {player.ai_summary_generated_at && (
-              <p className="mt-3 text-xs text-slate-500">
-                Gegenereerd op {new Date(player.ai_summary_generated_at).toLocaleString("nl-NL")}
-              </p>
-            )}
           </div>
-        ) : (
-          hasData && <p className="text-sm text-slate-500">Nog geen samenvatting gegenereerd.</p>
-        )}
-        <Message text={msg} error={err} />
-      </Card>
+          {!hasData && (
+            <p className="text-sm text-slate-500">
+              Nog geen statistieken, belastingdata of video-observaties voor deze speler.
+            </p>
+          )}
+          {player.ai_summary ? (
+            <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
+              {player.ai_summary}
+              {player.ai_summary_generated_at && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Gegenereerd op {new Date(player.ai_summary_generated_at).toLocaleString("nl-NL")}
+                </p>
+              )}
+            </div>
+          ) : (
+            hasData && <p className="text-sm text-slate-500">Nog geen samenvatting gegenereerd.</p>
+          )}
+          <Message text={msg} error={err} />
+        </Card>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-semibold">Statistieken</h2>
           <div className="mb-3 flex flex-wrap gap-4 text-sm">
             <span><span className="font-semibold">{totals.games}</span> wedstrijden</span>
-            <span><span className="font-semibold">{totals.minutes}</span> minuten</span>
+            {canEdit && <span><span className="font-semibold">{totals.minutes}</span> minuten</span>}
             <span><span className="font-semibold">{totals.goals}</span> goals</span>
             <span><span className="font-semibold">{totals.assists}</span> assists</span>
             {canEdit && (
               <span><span className="font-semibold">{avgRating !== null ? avgRating.toFixed(1) : "—"}</span> beoordeling</span>
             )}
           </div>
-          <div className="mb-4 grid gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3">
-            <span>
-              Minuten sinds laatste goal/assist: <span className="font-semibold text-slate-800">{minutesSinceContribution}&apos;</span>
-            </span>
-            <span>
-              Gem. minuten per goal: <span className="font-semibold text-slate-800">{avgMinutesPerGoal !== null ? `${Math.round(avgMinutesPerGoal)}'` : "—"}</span>
-            </span>
-            <span>
-              Gem. minuten per assist: <span className="font-semibold text-slate-800">{avgMinutesPerAssist !== null ? `${Math.round(avgMinutesPerAssist)}'` : "—"}</span>
-            </span>
-          </div>
+          {canEdit && (
+            <div className="mb-4 grid gap-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3">
+              <span>
+                Minuten sinds laatste goal/assist: <span className="font-semibold text-slate-800">{minutesSinceContribution}&apos;</span>
+              </span>
+              <span>
+                Gem. minuten per goal: <span className="font-semibold text-slate-800">{avgMinutesPerGoal !== null ? `${Math.round(avgMinutesPerGoal)}'` : "—"}</span>
+              </span>
+              <span>
+                Gem. minuten per assist: <span className="font-semibold text-slate-800">{avgMinutesPerAssist !== null ? `${Math.round(avgMinutesPerAssist)}'` : "—"}</span>
+              </span>
+            </div>
+          )}
           {stats.length === 0 ? (
             <p className="text-sm text-slate-500">Nog geen wedstrijdstatistieken.</p>
           ) : (
@@ -316,7 +329,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                       {m ? `${formatDate(m.date)} · ${m.home_away === "home" ? "thuis" : "uit"} tegen ${m.opponent}` : "onbekende wedstrijd"}
                     </span>
                     <span className="shrink-0 text-xs text-slate-500">
-                      {s.minutes_played}&apos; · {s.goals}g · {s.assists}a{s.rating ? ` · ${s.rating}/10` : ""}
+                      {canEdit
+                        ? `${s.minutes_played}' · ${s.goals}g · ${s.assists}a${s.rating ? ` · ${s.rating}/10` : ""}`
+                        : `${s.goals}g · ${s.assists}a`}
                     </span>
                   </div>
                 );

@@ -41,11 +41,18 @@ function drawingLabel(key: string): string {
   return `Linie-niveau — ${line ? line.charAt(0).toUpperCase() + line.slice(1) : line}`;
 }
 
-const TACTICAL_MOMENTS: { key: TacticalMoment; label: string }[] = [
+const TEAM_MOMENTS: { key: TacticalMoment; label: string }[] = [
   { key: "attacking", label: "Aanvallen" },
   { key: "defending", label: "Verdedigen" },
   { key: "transition_to_attack", label: "Omschakelen naar aanval" },
   { key: "transition_to_defense", label: "Omschakelen naar verdedigen" },
+];
+
+// Geen omschakelmomenten op linie-niveau — dat is een team-breed principe,
+// per linie houden we het bij aanvallen/verdedigen om de voorbereiding compact te houden.
+const LINE_MOMENTS: { key: TacticalMoment; label: string }[] = [
+  { key: "attacking", label: "Aanvallen" },
+  { key: "defending", label: "Verdedigen" },
 ];
 
 const LINES: { key: Line; label: string }[] = [
@@ -797,16 +804,16 @@ function WedstrijdenPageInner() {
           </Card>
 
           <Card className="mb-6">
-            <h2 className="mb-4 font-semibold">Tactische aandachtspunten</h2>
+            <h2 className="mb-3 font-semibold">Tactische aandachtspunten</h2>
 
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">Team-niveau</h3>
-            <div className="mb-6 grid gap-3 sm:grid-cols-2">
-              {TACTICAL_MOMENTS.map((moment) => (
+            <h3 className="mb-1.5 text-sm font-semibold text-slate-700">Team-niveau</h3>
+            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {TEAM_MOMENTS.map((moment) => (
                 <label key={moment.key} className="text-sm">
                   <span className="mb-1 block text-slate-500">{moment.label}</span>
                   <textarea
                     className={`${inputCls} w-full`}
-                    rows={3}
+                    rows={2}
                     value={tactics.team[moment.key]}
                     onChange={(e) => updateTeamTactic(moment.key, e.target.value)}
                   />
@@ -815,10 +822,10 @@ function WedstrijdenPageInner() {
             </div>
             {renderDrawingSlot("team")}
 
-            <h3 className="mb-2 mt-6 text-sm font-semibold text-slate-700">Linie-niveau</h3>
-            <div className="mb-3 flex flex-wrap gap-2">
+            <h3 className="mb-1.5 mt-4 text-sm font-semibold text-slate-700">Linie-niveau</h3>
+            <div className="mb-2 flex flex-wrap gap-2">
               {LINES.map((l) => {
-                const filledCount = TACTICAL_MOMENTS.filter((m) => tactics.line[l.key][m.key].trim()).length;
+                const filledCount = LINE_MOMENTS.filter((m) => tactics.line[l.key][m.key].trim()).length;
                 return (
                   <button
                     key={l.key}
@@ -830,20 +837,20 @@ function WedstrijdenPageInner() {
                     {l.label}
                     {filledCount > 0 && (
                       <span className={`ml-1.5 text-xs ${selectedLine === l.key ? "text-rose-100" : "text-slate-500"}`}>
-                        {filledCount}/4
+                        {filledCount}/{LINE_MOMENTS.length}
                       </span>
                     )}
                   </button>
                 );
               })}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {TACTICAL_MOMENTS.map((moment) => (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {LINE_MOMENTS.map((moment) => (
                 <label key={moment.key} className="text-sm">
                   <span className="mb-1 block text-slate-500">{moment.label}</span>
                   <textarea
                     className={`${inputCls} w-full`}
-                    rows={3}
+                    rows={2}
                     value={tactics.line[selectedLine][moment.key]}
                     onChange={(e) => updateLineTactic(selectedLine, moment.key, e.target.value)}
                   />
@@ -984,7 +991,7 @@ function WedstrijdenPageInner() {
                     <thead>
                       <tr className="border-b border-slate-200">
                         <th className={thCls}>Speler</th>
-                        <th className={thCls}>Minuten</th>
+                        {canEdit && <th className={thCls}>Minuten</th>}
                         <th className={thCls}>Goals</th>
                         <th className={thCls}>Assists</th>
                         {canEdit && <th className={thCls}>Beoordeling (1-10)</th>}
@@ -996,20 +1003,22 @@ function WedstrijdenPageInner() {
                         return (
                           <tr key={p.id} className="border-b border-slate-100">
                             <td className={`${tdCls} font-medium`}>{p.name}</td>
-                            <td className={tdCls}>
-                              <input
-                                type="number"
-                                min={0}
-                                max={130}
-                                className={`${inputCls} w-20`}
-                                defaultValue={s?.minutes_played || ""}
-                                placeholder="0"
-                                onBlur={(e) =>
-                                  e.target.value !== String(s?.minutes_played || "") &&
-                                  saveStat(p.id, "minutes_played", e.target.value)
-                                }
-                              />
-                            </td>
+                            {canEdit && (
+                              <td className={tdCls}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={130}
+                                  className={`${inputCls} w-20`}
+                                  defaultValue={s?.minutes_played || ""}
+                                  placeholder="0"
+                                  onBlur={(e) =>
+                                    e.target.value !== String(s?.minutes_played || "") &&
+                                    saveStat(p.id, "minutes_played", e.target.value)
+                                  }
+                                />
+                              </td>
+                            )}
                             <td className={tdCls}>
                               <input
                                 type="number"
