@@ -4,26 +4,20 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { ParsedMatch, parseMatchesFile, parseMatchesText } from "@/lib/parse";
-import { formatDateShort, isoWeek, todayIso } from "@/lib/format";
-import { computeMatchTimes, computeScheduleItemTimes } from "@/lib/schedule";
+import { formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { AbsenceTimeline } from "@/components/AbsenceTimeline";
 import { Absence, Club, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
-type Tab = "wedstrijden" | "agenda";
-
 type AgendaRow =
   | { kind: "schedule"; date: string; item: ScheduleItem }
   | { kind: "match"; date: string; match: Match };
 
+type TypeFilter = "alle" | "wedstrijd" | "training";
+
 function sortMatches(list: Match[]): Match[] {
   return [...list].sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`));
-}
-
-function weekNumber(dateIso: string): string {
-  const match = isoWeek(dateIso).match(/-W(\d+)$/);
-  return match ? String(parseInt(match[1], 10)) : "?";
 }
 
 function activityColor(activity: string): "green" | "blue" | "amber" | "slate" {
@@ -75,7 +69,6 @@ function CollapsibleCard({
 
 export default function ProgrammaPage() {
   const canEdit = useCanEdit();
-  const [tab, setTab] = useState<Tab>("wedstrijden");
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -93,6 +86,8 @@ export default function ProgrammaPage() {
 
   const [fetchingClubId, setFetchingClubId] = useState<string | null>(null);
   const [fetchAllBusy, setFetchAllBusy] = useState(false);
+
+  const [newKind, setNewKind] = useState<"wedstrijd" | "activiteit">("wedstrijd");
 
   const [newDate, setNewDate] = useState("");
   const [newKickoff, setNewKickoff] = useState("");
@@ -113,6 +108,9 @@ export default function ProgrammaPage() {
   const [absFrom, setAbsFrom] = useState("");
   const [absUntil, setAbsUntil] = useState("");
   const [absReason, setAbsReason] = useState("");
+
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("alle");
 
   const reload = () =>
     Promise.all([
@@ -142,7 +140,7 @@ export default function ProgrammaPage() {
     setErr(isError);
   }
 
-  // ---------- Wedstrijden ----------
+  // ---------- Wedstrijden importeren / handmatig toevoegen ----------
 
   async function handleFile(file: File) {
     try {
@@ -275,13 +273,24 @@ export default function ProgrammaPage() {
     await reload();
   }
 
-  // ---------- Agenda (trainingen/toernooien + wedstrijden samengevoegd) ----------
+  // ---------- Activiteiten (trainingen/toernooien) ----------
 
   const agendaRows: AgendaRow[] = useMemo(() => {
     const scheduleRows: AgendaRow[] = scheduleItems.map((item) => ({ kind: "schedule", date: item.date, item }));
     const matchRows: AgendaRow[] = matches.map((match) => ({ kind: "match", date: match.date, match }));
     return [...scheduleRows, ...matchRows];
   }, [scheduleItems, matches]);
+
+  const filteredAgendaRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return agendaRows.filter((r) => {
+      if (typeFilter === "wedstrijd" && r.kind !== "match") return false;
+      if (typeFilter === "training" && r.kind !== "schedule") return false;
+      if (!q) return true;
+      const haystack = r.kind === "match" ? r.match.opponent : r.item.activity;
+      return haystack.toLowerCase().includes(q);
+    });
+  }, [agendaRows, typeFilter, search]);
 
   function absentNamesForDate(date: string): string[] {
     return absences
@@ -319,20 +328,8 @@ export default function ProgrammaPage() {
     }
   }
 
-  async function updateField(
-    item: ScheduleItem,
-    field: "notes" | "kickoff_time" | "home_away" | "travel_time_minutes",
-    value: string
-  ) {
-    let patch: Partial<ScheduleItem>;
-    if (field === "travel_time_minutes") {
-      patch = { travel_time_minutes: value === "" ? null : parseInt(value, 10) };
-    } else if (field === "home_away") {
-      patch = { home_away: value === "" ? null : (value as "home" | "away") };
-    } else {
-      patch = { [field]: value.trim() || null };
-    }
-    await api.update("schedule_items", item.id, patch);
+  async function updateField(item: ScheduleItem, field: "notes" | "kickoff_time", value: string) {
+    await api.update("schedule_items", item.id, { [field]: value.trim() || null });
     await reload();
   }
 
@@ -404,97 +401,8 @@ export default function ProgrammaPage() {
   const awayOpponents = new Set(matches.filter((m) => m.home_away === "away").map((m) => m.opponent.toLowerCase()));
   const relevantClubs = clubs.filter((c) => awayOpponents.has(c.name.toLowerCase()));
   const hasMissingTravel = relevantClubs.some((c) => c.travel_time_minutes == null);
-  const { upcoming: upcomingMatches, past: pastMatches } = splitByDate(matches, (m) => m.date, today);
-  const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(agendaRows, (r) => r.date, today);
-
-  function matchRow(m: Match) {
-    const played = m.date <= today;
-    return (
-      <tr key={m.id} className="border-b border-slate-100">
-        <td className={tdCls}>{formatDateShort(m.date)}</td>
-        <td className={tdCls}>{m.kickoff_time}</td>
-        <td className={`${tdCls} font-medium`}>{m.opponent}</td>
-        <td className={tdCls}>
-          <Badge color={m.home_away === "home" ? "green" : "blue"}>
-            {m.home_away === "home" ? "Thuis" : "Uit"}
-          </Badge>
-        </td>
-        <td className={tdCls}>
-          {played ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                disabled={!canEdit}
-                className={`${inputCls} w-14`}
-                defaultValue={m.score_for ?? ""}
-                placeholder="-"
-                onBlur={(e) =>
-                  e.target.value !== String(m.score_for ?? "") && updateScore(m, "score_for", e.target.value)
-                }
-              />
-              <span className="text-slate-500">–</span>
-              <input
-                type="number"
-                min={0}
-                disabled={!canEdit}
-                className={`${inputCls} w-14`}
-                defaultValue={m.score_against ?? ""}
-                placeholder="-"
-                onBlur={(e) =>
-                  e.target.value !== String(m.score_against ?? "") &&
-                  updateScore(m, "score_against", e.target.value)
-                }
-              />
-            </div>
-          ) : (
-            <Badge>gepland</Badge>
-          )}
-        </td>
-        <td className={tdCls}>
-          <div className="flex flex-col gap-0.5">
-            <Link href={`/wedstrijden?match=${m.id}`} className="text-xs font-medium text-rose-600 hover:underline">
-              Bekijk →
-            </Link>
-            {m.score_for !== null && m.score_against !== null && (
-              <Link href={`/resultaten?match=${m.id}`} className="text-xs font-medium text-rose-600 hover:underline">
-                🎥 Analyse →
-              </Link>
-            )}
-          </div>
-        </td>
-        <td className={tdCls}>
-          {canEdit && (
-            <button className="text-xs text-red-500 hover:underline" onClick={() => removeMatch(m)}>
-              verwijderen
-            </button>
-          )}
-        </td>
-      </tr>
-    );
-  }
-
-  function matchTable(list: Match[], emptyText: string) {
-    if (list.length === 0) return <p className="text-sm text-slate-500">{emptyText}</p>;
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-200">
-              <th className={thCls}>Datum</th>
-              <th className={thCls}>Aftrap</th>
-              <th className={thCls}>Tegenstander</th>
-              <th className={thCls}>Thuis/uit</th>
-              <th className={thCls}>Uitslag</th>
-              <th className={thCls}></th>
-              <th className={thCls}></th>
-            </tr>
-          </thead>
-          <tbody>{list.map(matchRow)}</tbody>
-        </table>
-      </div>
-    );
-  }
+  const hasActiveAbsence = absences.some((a) => today >= a.from && today <= a.until);
+  const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(filteredAgendaRows, (r) => r.date, today);
 
   function agendaRow(row: AgendaRow) {
     const absentNames = absentNamesForDate(row.date);
@@ -507,121 +415,103 @@ export default function ProgrammaPage() {
 
     if (row.kind === "match") {
       const { match } = row;
-      const times = computeMatchTimes(match, clubs);
+      const played = match.date <= today;
       const activity = `Wedstrijd ${match.opponent} (${match.home_away === "home" ? "thuis" : "uit"})`;
       return (
         <tr key={`match-${match.id}`} className="border-b border-slate-100 bg-blue-50/30">
-          <td className={tdCls}>{weekNumber(match.date)}</td>
           <td className={tdCls}>{formatDateShort(match.date)}</td>
           <td className={tdCls}>
             <Badge color="blue">{activity}</Badge>
           </td>
-          <td className={tdCls}>{match.kickoff_time}</td>
+          <td className={`${tdCls} text-xs`}>{match.kickoff_time}</td>
           <td className={tdCls}>
-            <span className="text-xs text-slate-500">{match.home_away === "home" ? "Thuis" : "Uit"}</span>
-          </td>
-          <td className={tdCls}>
-            {match.home_away === "away" ? (
-              <span className="text-xs text-slate-500">{times.travelMinutes ?? "?"} min</span>
+            {played ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!canEdit}
+                  className={`${inputCls} w-12 text-xs`}
+                  defaultValue={match.score_for ?? ""}
+                  placeholder="-"
+                  onBlur={(e) =>
+                    e.target.value !== String(match.score_for ?? "") && updateScore(match, "score_for", e.target.value)
+                  }
+                />
+                <span className="text-slate-500">–</span>
+                <input
+                  type="number"
+                  min={0}
+                  disabled={!canEdit}
+                  className={`${inputCls} w-12 text-xs`}
+                  defaultValue={match.score_against ?? ""}
+                  placeholder="-"
+                  onBlur={(e) =>
+                    e.target.value !== String(match.score_against ?? "") &&
+                    updateScore(match, "score_against", e.target.value)
+                  }
+                />
+              </div>
             ) : (
-              <span className="text-xs text-slate-500">–</span>
-            )}
-          </td>
-          <td className={tdCls}>
-            {times.depart ? (
-              <Badge color="amber">{times.depart}</Badge>
-            ) : times.arrive && match.home_away === "home" ? (
-              <span className="text-xs text-slate-500">aanwezig {times.arrive} (thuis)</span>
-            ) : (
-              <span className="text-xs text-amber-600">vul reistijd in bij Wedstrijden</span>
+              <Badge>gepland</Badge>
             )}
           </td>
           <td className={tdCls}>{afwezigCell}</td>
-          <td className={`${tdCls} min-w-[16rem] text-slate-500`}>{match.notes ?? match.competition ?? "–"}</td>
+          <td className={`${tdCls} max-w-[10rem] truncate text-xs text-slate-500`} title={match.notes ?? match.competition ?? ""}>
+            {match.notes ?? match.competition ?? "–"}
+          </td>
           <td className={tdCls}>
-            <Link href={`/wedstrijden?match=${match.id}`} className="text-xs font-medium text-emerald-600 hover:underline">
-              Bekijk →
-            </Link>
+            <div className="flex flex-col gap-0.5">
+              <Link href={`/wedstrijden?match=${match.id}`} className="text-xs font-medium text-emerald-600 hover:underline">
+                Bekijk →
+              </Link>
+              {match.score_for !== null && match.score_against !== null && (
+                <Link href={`/resultaten?match=${match.id}`} className="text-xs font-medium text-rose-600 hover:underline">
+                  🎥 Analyse →
+                </Link>
+              )}
+              {canEdit && (
+                <button className="text-left text-xs text-red-500 hover:underline" onClick={() => removeMatch(match)}>
+                  verwijderen
+                </button>
+              )}
+            </div>
           </td>
         </tr>
       );
     }
 
     const item = row.item;
-    const times = computeScheduleItemTimes(item);
+    const activityLabel = item.home_away ? `${item.activity} (${item.home_away === "home" ? "thuis" : "uit"})` : item.activity;
     return (
       <tr key={`item-${item.id}`} className="border-b border-slate-100">
-        <td className={tdCls}>{weekNumber(item.date)}</td>
         <td className={tdCls}>{formatDateShort(item.date)}</td>
         <td className={tdCls}>
-          <Badge color={activityColor(item.activity)}>{item.activity}</Badge>
+          <Badge color={activityColor(item.activity)}>{activityLabel}</Badge>
         </td>
         <td className={tdCls}>
           <input
             type="time"
             disabled={!canEdit}
-            className={`${inputCls} w-24`}
+            className={`${inputCls} w-20 text-xs`}
             defaultValue={item.kickoff_time ?? ""}
             onBlur={(e) =>
-              e.target.value !== (item.kickoff_time ?? "") &&
-              updateField(item, "kickoff_time", e.target.value)
+              e.target.value !== (item.kickoff_time ?? "") && updateField(item, "kickoff_time", e.target.value)
             }
           />
         </td>
         <td className={tdCls}>
-          <select
-            className={inputCls}
-            disabled={!canEdit}
-            defaultValue={item.home_away ?? ""}
-            onChange={(e) => updateField(item, "home_away", e.target.value)}
-          >
-            <option value="">–</option>
-            <option value="home">Thuis</option>
-            <option value="away">Uit</option>
-          </select>
-        </td>
-        <td className={tdCls}>
-          {item.home_away === "away" ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                disabled={!canEdit}
-                className={`${inputCls} w-20`}
-                defaultValue={item.travel_time_minutes ?? ""}
-                placeholder="?"
-                onBlur={(e) =>
-                  e.target.value !== String(item.travel_time_minutes ?? "") &&
-                  updateField(item, "travel_time_minutes", e.target.value)
-                }
-              />
-              <span className="text-xs text-slate-500">min</span>
-            </div>
-          ) : (
-            <span className="text-xs text-slate-500">–</span>
-          )}
-        </td>
-        <td className={tdCls}>
-          {times.depart ? (
-            <Badge color="amber">{times.depart}</Badge>
-          ) : times.arrive && item.home_away === "home" ? (
-            <span className="text-xs text-slate-500">aanwezig {times.arrive} (thuis)</span>
-          ) : times.arrive && item.home_away === "away" ? (
-            <span className="text-xs text-amber-600">vul reistijd in</span>
-          ) : (
-            <span className="text-xs text-slate-500">–</span>
-          )}
+          <span className="text-xs text-slate-500">–</span>
         </td>
         <td className={tdCls}>{afwezigCell}</td>
-        <td className={`${tdCls} min-w-[22rem]`}>
+        <td className={tdCls}>
           <input
             type="text"
             disabled={!canEdit}
-            className={`${inputCls} w-full min-w-[22rem]`}
+            className={`${inputCls} w-full max-w-[10rem] text-xs`}
+            placeholder="Opmerking"
             defaultValue={item.notes ?? ""}
-            onBlur={(e) =>
-              e.target.value !== (item.notes ?? "") && updateField(item, "notes", e.target.value)
-            }
+            onBlur={(e) => e.target.value !== (item.notes ?? "") && updateField(item, "notes", e.target.value)}
           />
         </td>
         <td className={tdCls}>
@@ -642,13 +532,10 @@ export default function ProgrammaPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-200">
-              <th className={thCls}>Week</th>
               <th className={thCls}>Datum</th>
               <th className={thCls}>Activiteit</th>
               <th className={thCls}>Aftrap</th>
-              <th className={thCls}>Thuis/uit</th>
-              <th className={thCls}>Reistijd</th>
-              <th className={thCls}>Vertrektijd</th>
+              <th className={thCls}>Uitslag</th>
               <th className={thCls}>Afwezig</th>
               <th className={thCls}>Opmerking</th>
               <th className={thCls}></th>
@@ -667,28 +554,14 @@ export default function ProgrammaPage() {
         subtitle="Wedstrijden, trainingen en toernooien op één plek, gesplitst in aankomend en verleden."
       />
 
-      <div className="mb-6 flex gap-2">
-        <button
-          onClick={() => setTab("wedstrijden")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === "wedstrijden" ? "bg-rose-600 text-white" : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"}`}
-        >
-          Wedstrijden
-        </button>
-        <button
-          onClick={() => setTab("agenda")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === "agenda" ? "bg-rose-600 text-white" : "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"}`}
-        >
-          Agenda
-        </button>
-      </div>
-
       <Message text={msg} error={err} />
 
-      {tab === "wedstrijden" && (
+      {canEdit && (
         <>
-          {canEdit && (
-          <>
-          <CollapsibleCard title="Wedstrijd toevoegen of importeren" subtitle="Plakken vanaf voetbal.nl, Excel/CSV-upload of handmatig">
+          <CollapsibleCard
+            title="Activiteit toevoegen of wedstrijden importeren"
+            subtitle="Plakken vanaf voetbal.nl, Excel/CSV-upload, of handmatig een wedstrijd/training/toernooi"
+          >
             <div className="grid gap-6 lg:grid-cols-2">
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Plakken vanaf voetbal.nl</h3>
@@ -717,41 +590,109 @@ export default function ProgrammaPage() {
                 />
                 <p className="mt-2 text-xs text-slate-500">
                   Kolommen worden automatisch herkend: datum, tijd, en “wedstrijd” (Team A - Team B) of aparte thuis/uit-kolommen.
-                  Thuis of uit wordt bepaald aan de hand van de teamnaam (Steenwijkerwold).
+                  Thuis of uit wordt bepaald aan de hand van de teamnaam (Steenwijkerwold). Alleen voor wedstrijden.
                 </p>
               </div>
             </div>
 
             <div className="mt-6 border-t border-slate-100 pt-4">
-              <h3 className="mb-2 text-sm font-semibold">Eén wedstrijd handmatig toevoegen</h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <input type="date" className={inputCls} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-                <input type="time" className={inputCls} value={newKickoff} onChange={(e) => setNewKickoff(e.target.value)} />
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="Tegenstander"
-                  value={newOpponent}
-                  onChange={(e) => setNewOpponent(e.target.value)}
-                />
-                <select
-                  className={inputCls}
-                  value={newHomeAway}
-                  onChange={(e) => setNewHomeAway(e.target.value as "home" | "away")}
+              <h3 className="mb-2 text-sm font-semibold">Eén activiteit handmatig toevoegen</h3>
+              <div className="mb-3 flex gap-2">
+                <button
+                  onClick={() => setNewKind("wedstrijd")}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                    newKind === "wedstrijd" ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600"
+                  }`}
                 >
-                  <option value="home">Thuis</option>
-                  <option value="away">Uit</option>
-                </select>
-                <input
-                  type="text"
-                  className={inputCls}
-                  placeholder="Competitie (optioneel)"
-                  value={newCompetition}
-                  onChange={(e) => setNewCompetition(e.target.value)}
-                />
+                  Wedstrijd
+                </button>
+                <button
+                  onClick={() => setNewKind("activiteit")}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                    newKind === "activiteit" ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600"
+                  }`}
+                >
+                  Training / toernooi
+                </button>
               </div>
+
+              {newKind === "wedstrijd" ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <input type="date" className={inputCls} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+                  <input type="time" className={inputCls} value={newKickoff} onChange={(e) => setNewKickoff(e.target.value)} />
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Tegenstander"
+                    value={newOpponent}
+                    onChange={(e) => setNewOpponent(e.target.value)}
+                  />
+                  <select
+                    className={inputCls}
+                    value={newHomeAway}
+                    onChange={(e) => setNewHomeAway(e.target.value as "home" | "away")}
+                  >
+                    <option value="home">Thuis</option>
+                    <option value="away">Uit</option>
+                  </select>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Competitie (optioneel)"
+                    value={newCompetition}
+                    onChange={(e) => setNewCompetition(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <input
+                    type="date"
+                    className={inputCls}
+                    value={newItemDate}
+                    onChange={(e) => setNewItemDate(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Activiteit (bv. training 11, GEMPO Toermooi)"
+                    value={newActivity}
+                    onChange={(e) => setNewActivity(e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    className={inputCls}
+                    placeholder="Aftrap"
+                    value={newItemKickoff}
+                    onChange={(e) => setNewItemKickoff(e.target.value)}
+                  />
+                  <select
+                    className={inputCls}
+                    value={newItemHomeAway}
+                    onChange={(e) => setNewItemHomeAway(e.target.value as "" | "home" | "away")}
+                  >
+                    <option value="">Thuis/uit (n.v.t.)</option>
+                    <option value="home">Thuis</option>
+                    <option value="away">Uit</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputCls}
+                    placeholder="Reistijd (min)"
+                    value={newTravel}
+                    onChange={(e) => setNewTravel(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className={`${inputCls} lg:col-span-3`}
+                    placeholder="Opmerking (optioneel)"
+                    value={newNotes}
+                    onChange={(e) => setNewNotes(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="mt-3">
-                <Button onClick={addMatch}>Toevoegen</Button>
+                <Button onClick={() => (newKind === "wedstrijd" ? addMatch() : addItem())}>Toevoegen</Button>
               </div>
             </div>
           </CollapsibleCard>
@@ -798,10 +739,8 @@ export default function ProgrammaPage() {
               </div>
             </Card>
           )}
-          </>
-          )}
 
-          {canEdit && relevantClubs.length > 0 && (
+          {relevantClubs.length > 0 && (
             <CollapsibleCard
               title="Reistijden uitwedstrijden 🚗"
               subtitle={hasMissingTravel ? "Nog niet voor alle clubs ingevuld" : "Voor alle clubs ingevuld"}
@@ -857,160 +796,115 @@ export default function ProgrammaPage() {
               </div>
             </CollapsibleCard>
           )}
-
-          <Card className="mt-6">
-            <h2 className="mb-3 font-semibold">
-              Aankomende wedstrijden <span className="text-sm font-normal text-slate-500">({upcomingMatches.length})</span>
-            </h2>
-            {matchTable(upcomingMatches, "Geen aankomende wedstrijden.")}
-          </Card>
-
-          <Card className="mt-6">
-            <h2 className="mb-3 font-semibold">
-              Gespeelde wedstrijden <span className="text-sm font-normal text-slate-500">({pastMatches.length})</span>
-            </h2>
-            {matchTable(pastMatches, "Nog geen wedstrijden gespeeld.")}
-          </Card>
         </>
       )}
 
-      {tab === "agenda" && (
-        <>
+      <CollapsibleCard
+        title="Afwezigheid beheren"
+        subtitle={hasActiveAbsence ? "Er is nu iemand afwezig" : "Niemand momenteel afwezig"}
+        defaultOpen={hasActiveAbsence}
+        className="mt-6"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">
+            Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
+            Klik in de tijdlijn op een bestaande balk om 'm te bewerken, bijvoorbeeld als iemand eerder terug is.
+          </p>
           {canEdit && (
-          <CollapsibleCard
-            title="Training of toernooi toevoegen"
-            subtitle="Voor wedstrijden: gebruik het tabblad Wedstrijden"
-          >
-            <p className="mb-3 text-xs text-slate-500">
-              Voor wedstrijden: gebruik het tabblad <button className="font-medium text-emerald-600 hover:underline" onClick={() => setTab("wedstrijden")}>Wedstrijden</button> — ze verschijnen dan automatisch hieronder.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <input
-                type="date"
-                className={inputCls}
-                value={newItemDate}
-                onChange={(e) => setNewItemDate(e.target.value)}
-              />
-              <input
-                type="text"
-                className={inputCls}
-                placeholder="Activiteit (bv. training 11, GEMPO Toermooi)"
-                value={newActivity}
-                onChange={(e) => setNewActivity(e.target.value)}
-              />
-              <input
-                type="time"
-                className={inputCls}
-                placeholder="Aftrap"
-                value={newItemKickoff}
-                onChange={(e) => setNewItemKickoff(e.target.value)}
-              />
-              <select
-                className={inputCls}
-                value={newItemHomeAway}
-                onChange={(e) => setNewItemHomeAway(e.target.value as "" | "home" | "away")}
-              >
-                <option value="">Thuis/uit (n.v.t.)</option>
-                <option value="home">Thuis</option>
-                <option value="away">Uit</option>
-              </select>
-              <input
-                type="number"
-                min={0}
-                className={inputCls}
-                placeholder="Reistijd (min)"
-                value={newTravel}
-                onChange={(e) => setNewTravel(e.target.value)}
-              />
-              <input
-                type="text"
-                className={`${inputCls} lg:col-span-2`}
-                placeholder="Opmerking (optioneel)"
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-              />
-              <Button onClick={addItem}>Toevoegen</Button>
-            </div>
-          </CollapsibleCard>
+            <button
+              onClick={() => (absFormOpen ? resetAbsenceForm() : setAbsFormOpen(true))}
+              className="shrink-0 text-xs font-medium text-emerald-600 hover:underline"
+            >
+              {absFormOpen ? "Sluiten" : "+ Toevoegen"}
+            </button>
           )}
-
-          <Card className="mt-6">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-semibold">Afwezigheid beheren</h2>
-              {canEdit && (
-                <button
-                  onClick={() => (absFormOpen ? resetAbsenceForm() : setAbsFormOpen(true))}
-                  className="text-xs font-medium text-emerald-600 hover:underline"
-                >
-                  {absFormOpen ? "Sluiten" : "+ Toevoegen"}
+        </div>
+        {canEdit && absFormOpen && (
+          <div className="mb-2 mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)} disabled={!!editingAbsenceId}>
+              <option value="">— Kies speler/staflid —</option>
+              <optgroup label="Spelers">
+                {players.map((p) => (
+                  <option key={p.id} value={`player:${p.id}`}>{p.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Staf">
+                {staff.map((s) => (
+                  <option key={s.id} value={`staff:${s.id}`}>{s.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <input type="date" className={inputCls} value={absFrom} onChange={(e) => setAbsFrom(e.target.value)} />
+            <input type="date" className={inputCls} value={absUntil} onChange={(e) => setAbsUntil(e.target.value)} />
+            <input
+              type="text"
+              className={inputCls}
+              placeholder="Reden (optioneel)"
+              value={absReason}
+              onChange={(e) => setAbsReason(e.target.value)}
+            />
+            <div className="flex items-center gap-3">
+              <Button onClick={saveAbsence}>{editingAbsenceId ? "Bijwerken" : "Toevoegen"}</Button>
+              {editingAbsenceId && (
+                <button className="text-xs text-slate-500 hover:underline" onClick={resetAbsenceForm}>
+                  annuleren
                 </button>
               )}
             </div>
-            <p className="mb-3 text-xs text-slate-500">
-              Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
-              Klik in de tijdlijn op een bestaande balk om 'm te bewerken, bijvoorbeeld als iemand eerder terug is.
-            </p>
-            {canEdit && absFormOpen && (
-            <div className="mb-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)} disabled={!!editingAbsenceId}>
-                <option value="">— Kies speler/staflid —</option>
-                <optgroup label="Spelers">
-                  {players.map((p) => (
-                    <option key={p.id} value={`player:${p.id}`}>{p.name}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Staf">
-                  {staff.map((s) => (
-                    <option key={s.id} value={`staff:${s.id}`}>{s.name}</option>
-                  ))}
-                </optgroup>
-              </select>
-              <input type="date" className={inputCls} value={absFrom} onChange={(e) => setAbsFrom(e.target.value)} />
-              <input type="date" className={inputCls} value={absUntil} onChange={(e) => setAbsUntil(e.target.value)} />
-              <input
-                type="text"
-                className={inputCls}
-                placeholder="Reden (optioneel)"
-                value={absReason}
-                onChange={(e) => setAbsReason(e.target.value)}
-              />
-              <div className="flex items-center gap-3">
-                <Button onClick={saveAbsence}>{editingAbsenceId ? "Bijwerken" : "Toevoegen"}</Button>
-                {editingAbsenceId && (
-                  <button className="text-xs text-slate-500 hover:underline" onClick={resetAbsenceForm}>
-                    annuleren
-                  </button>
-                )}
-              </div>
-            </div>
-            )}
+          </div>
+        )}
 
-            <div className="mt-5">
-              <AbsenceTimeline
-                players={players}
-                staff={staff}
-                absences={absences}
-                onRemove={canEdit ? removeAbsence : undefined}
-                onEdit={canEdit ? startEditAbsence : undefined}
-              />
-            </div>
-          </Card>
+        <div className="mt-5">
+          <AbsenceTimeline
+            players={players}
+            staff={staff}
+            absences={absences}
+            onRemove={canEdit ? removeAbsence : undefined}
+            onEdit={canEdit ? startEditAbsence : undefined}
+          />
+        </div>
+      </CollapsibleCard>
 
-          <Card className="mt-6">
-            <h2 className="mb-3 font-semibold">
-              Aankomend <span className="text-sm font-normal text-slate-500">({upcomingAgenda.length})</span>
-            </h2>
-            {agendaTable(upcomingAgenda, "Niets aankomend gepland.")}
-          </Card>
+      <div className="mb-4 mt-6 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          className={`${inputCls} max-w-xs`}
+          placeholder="Zoeken op tegenstander of activiteit…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex gap-1">
+          {([
+            ["alle", "Alles"],
+            ["wedstrijd", "Wedstrijden"],
+            ["training", "Trainingen"],
+          ] as [TypeFilter, string][]).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setTypeFilter(value)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                typeFilter === value ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          <Card className="mt-6">
-            <h2 className="mb-3 font-semibold">
-              Verleden <span className="text-sm font-normal text-slate-500">({pastAgenda.length})</span>
-            </h2>
-            {agendaTable(pastAgenda, "Nog niets geweest.")}
-          </Card>
-        </>
-      )}
+      <Card className="mb-6">
+        <h2 className="mb-3 font-semibold">
+          Aankomend <span className="text-sm font-normal text-slate-500">({upcomingAgenda.length})</span>
+        </h2>
+        {agendaTable(upcomingAgenda, "Niets aankomend gepland.")}
+      </Card>
+
+      <Card className="mb-6">
+        <h2 className="mb-3 font-semibold">
+          Verleden <span className="text-sm font-normal text-slate-500">({pastAgenda.length})</span>
+        </h2>
+        {agendaTable(pastAgenda, "Nog niets geweest.")}
+      </Card>
     </div>
   );
 }
