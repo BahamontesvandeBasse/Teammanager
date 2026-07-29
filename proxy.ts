@@ -5,9 +5,9 @@ import { neonConfigured } from "@/lib/db/neonClient";
 // Auth-guard: alleen actief wanneer Neon is geconfigureerd.
 // Zonder Neon draait de app in lokale modus zonder login.
 
-// Spelers loggen niet in — deze paden gebruiken een token en moeten dus
-// publiek bereikbaar blijven, ook als login actief is.
-const PUBLIC_PREFIXES = ["/mijn", "/api/mijn", "/api/auth"];
+// NextAuth's eigen routes moeten publiek bereikbaar blijven (login-form,
+// callback), anders kan niemand meer inloggen.
+const PUBLIC_PREFIXES = ["/api/auth"];
 
 export default auth((request) => {
   const pathname = request.nextUrl.pathname;

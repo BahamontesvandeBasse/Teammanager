@@ -20,17 +20,17 @@ import {
   TacticalMomentNotes,
 } from "@/lib/types";
 
-const TEAM_MOMENTS: { key: TacticalMoment; label: string }[] = [
-  { key: "attacking", label: "Aanvallen" },
-  { key: "defending", label: "Verdedigen" },
-  { key: "transition_to_attack", label: "Omschakelen naar aanval" },
-  { key: "transition_to_defense", label: "Omschakelen naar verdedigen" },
+const TEAM_MOMENTS: { key: TacticalMoment; label: string; icon: string }[] = [
+  { key: "attacking", label: "Aanvallen", icon: "⚔️" },
+  { key: "defending", label: "Verdedigen", icon: "🛡️" },
+  { key: "transition_to_attack", label: "Omschakelen naar aanval", icon: "⏩" },
+  { key: "transition_to_defense", label: "Omschakelen naar verdedigen", icon: "⏪" },
 ];
 
 // Geen omschakelmomenten op linie-niveau, zie ook de wedstrijdvoorbereiding-editor.
-const LINE_MOMENTS: { key: TacticalMoment; label: string }[] = [
-  { key: "attacking", label: "Aanvallen" },
-  { key: "defending", label: "Verdedigen" },
+const LINE_MOMENTS: { key: TacticalMoment; label: string; icon: string }[] = [
+  { key: "attacking", label: "Aanvallen", icon: "⚔️" },
+  { key: "defending", label: "Verdedigen", icon: "🛡️" },
 ];
 
 const LINES: { key: Line; label: string }[] = [
@@ -39,7 +39,10 @@ const LINES: { key: Line; label: string }[] = [
   { key: "aanval", label: "Aanval" },
 ];
 
-function filledMoments(m: TacticalMomentNotes | undefined, moments: { key: TacticalMoment; label: string }[]) {
+function filledMoments(
+  m: TacticalMomentNotes | undefined,
+  moments: { key: TacticalMoment; label: string; icon: string }[]
+) {
   if (!m) return [];
   return moments.filter((mo) => m[mo.key]?.trim());
 }
@@ -101,15 +104,22 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     .map(([, pid]) => players.find((p) => p.id === pid)?.name)
     .filter(Boolean) as string[];
 
+  const isAway = match.home_away === "away";
+  const lineTactics = LINES.map((line) => ({
+    line,
+    moments: filledMoments(prep?.tactical_notes?.line?.[line.key], LINE_MOMENTS),
+    drawing: drawings[`line:${line.key}`],
+  })).filter((l) => l.moments.length > 0 || (l.drawing && l.drawing.length > 0));
+
   return (
     <div className="mx-auto max-w-3xl p-6 print:max-w-none print:p-0">
-      {/* A3 liggend i.p.v. het printerstandaard-formaat: meer breedte om de
-          opstelling, tactiek en standaardsituaties in drie compacte kolommen
-          naast elkaar te zetten, zodat alles op één vel past. */}
+      {/* A3 liggend i.p.v. het printerstandaard-formaat: genoeg ruimte voor een
+          posterachtige, op afstand leesbare opzet (grote kop, grote opstelling,
+          tactiek als korte regels) in plaats van een dicht dataoverzicht. */}
       <style>{`
         @page {
           size: A3 landscape;
-          margin: 10mm;
+          margin: 8mm;
         }
       `}</style>
 
@@ -122,26 +132,33 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
         </button>
       </div>
 
-      <h1 className="text-2xl font-bold print:text-2xl">
-        {match.home_away === "away" ? `${match.opponent} — Sv Steenwijkerwold` : `Sv Steenwijkerwold — ${match.opponent}`}
-      </h1>
-      <p className="mb-6 text-sm text-slate-600 print:mb-4 print:text-sm">
-        {formatDate(match.date)} · aftrap {match.kickoff_time} · {match.home_away === "home" ? "Thuiswedstrijd" : "Uitwedstrijd"}
-        {match.competition ? ` · ${match.competition}` : ""}
-      </p>
+      {/* Kop: groot en in clubkleuren, in één oogopslag leesbaar vanaf een paar meter. */}
+      <div className="print-color-exact mb-5 rounded-2xl bg-rose-600 px-6 py-4 text-white print:mb-4 print:rounded-none print:px-5 print:py-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-3xl font-extrabold leading-tight print:text-4xl">
+            {isAway ? `${match.opponent} — Sv Steenwijkerwold` : `Sv Steenwijkerwold — ${match.opponent}`}
+          </h1>
+          <Badge>{isAway ? "UITWEDSTRIJD" : "THUISWEDSTRIJD"}</Badge>
+        </div>
+        <p className="mt-1 text-base font-medium text-rose-50 print:text-lg">
+          {formatDate(match.date)} · aftrap {match.kickoff_time}
+          {match.competition ? ` · ${match.competition}` : ""}
+        </p>
+      </div>
 
       {!prep ? (
         <p className="text-slate-500">Nog geen voorbereiding ingevuld voor deze wedstrijd.</p>
       ) : (
-        <div className="print:grid print:grid-cols-3 print:gap-6 print:items-start">
+        <div className="print:grid print:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] print:gap-6 print:items-start">
+          {/* Linkerkolom: de opstelling, groot en centraal. */}
           <div>
             {slots.length > 0 && (
-              <div className="mb-6 break-inside-avoid print:mb-5">
+              <div className="mb-6 break-inside-avoid print:mb-0">
                 {prep.formation && (
-                  <p className="mb-2 text-sm font-medium text-slate-700 print:mb-1 print:text-sm">Formatie: {prep.formation}</p>
+                  <p className="mb-2 text-center text-lg font-bold text-slate-800 print:text-xl">{prep.formation}</p>
                 )}
                 <div
-                  className="print-color-exact relative mx-auto w-full max-w-md overflow-hidden rounded-xl border-2 border-white/80 print:max-w-[230px]"
+                  className="print-color-exact relative mx-auto w-full max-w-md overflow-hidden rounded-xl border-2 border-white/80 print:max-w-[380px]"
                   style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
                 >
                   <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
@@ -158,7 +175,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                         className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
                       >
                         <span
-                          className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white print:h-9 print:w-9 print:text-sm ${
+                          className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold text-white print:h-12 print:w-12 print:text-lg ${
                             isAbsent
                               ? "border-red-400 bg-red-600"
                               : player
@@ -170,7 +187,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                         >
                           {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
                         </span>
-                        <span className="max-w-[70px] truncate rounded bg-black/50 px-1 text-[10px] leading-tight text-white print:max-w-[80px] print:text-[10px]">
+                        <span className="max-w-[80px] truncate rounded bg-black/50 px-1 text-[10px] leading-tight text-white print:max-w-[100px] print:text-xs">
                           {player?.name.split(" ")[0] ?? ""}
                         </span>
                       </div>
@@ -178,119 +195,124 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                   })}
                 </div>
                 {Object.keys(guestNames).length > 0 && (
-                  <p className="mt-2 text-xs text-purple-700 print:mt-1 print:text-xs">
+                  <p className="mt-2 text-center text-xs text-purple-700 print:text-sm">
                     G = gastspeler: {Object.values(guestNames).join(", ")}
                   </p>
                 )}
                 {absentInLineup.length > 0 && (
-                  <p className="print-color-exact mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700 print:mt-1 print:px-2 print:py-1 print:text-xs">
-                    ⚠️ Let op: {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld op deze datum.
+                  <p className="print-color-exact mt-3 rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-bold text-red-700 print:mt-2 print:px-3 print:py-2 print:text-sm">
+                    ⚠️ {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
                   </p>
                 )}
-              </div>
-            )}
-
-            {substituteNames.length > 0 && (
-              <div className="mb-6 break-inside-avoid print:mb-5">
-                <h2 className="mb-1 font-semibold print:mb-1 print:text-base">Wisselspelers</h2>
-                <p className="text-sm text-slate-700 print:text-sm">{substituteNames.join(", ")}</p>
+                {substituteNames.length > 0 && (
+                  <div className="mt-4 text-center print:mt-3">
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">Wissels</span>
+                    <p className="text-sm font-medium text-slate-800 print:text-base">{substituteNames.join(" · ")}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
+          {/* Rechterkolom: tactiek als korte, grote regels + standaardsituaties compact. */}
           <div>
             {teamMoments.length > 0 && (
-              <div className="mb-6 break-inside-avoid print:mb-5">
-                <h2 className="mb-2 font-semibold print:mb-1 print:text-base">Tactiek — team-niveau</h2>
-                <dl className="grid gap-2 sm:grid-cols-2 print:grid-cols-1 print:gap-1.5">
+              <div className="mb-4 break-inside-avoid print:mb-4">
+                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Team-tactiek</h2>
+                <div className="grid gap-2 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
                   {teamMoments.map((m) => (
-                    <div key={m.key}>
-                      <dt className="text-xs font-medium text-slate-500 print:text-xs">{m.label}</dt>
-                      <dd className="text-sm text-slate-800 print:text-sm">{prep.tactical_notes!.team[m.key]}</dd>
+                    <div key={m.key} className="rounded-lg border border-slate-200 px-3 py-2 print:border-slate-300">
+                      <div className="text-xs font-semibold text-slate-500 print:text-sm">
+                        {m.icon} {m.label}
+                      </div>
+                      <div className="text-sm font-medium text-slate-900 print:text-base">{prep.tactical_notes!.team[m.key]}</div>
                     </div>
                   ))}
-                </dl>
+                </div>
                 {drawings["team"]?.length > 0 && (
-                  <div className="mt-2 print:mt-1.5">
-                    <DrawingThumbnail strokes={drawings["team"]} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[170px]" />
+                  <div className="mt-2 print:mt-2">
+                    <DrawingThumbnail strokes={drawings["team"]} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[190px]" />
                   </div>
                 )}
               </div>
             )}
 
-            {LINES.map((line) => {
-              const moments = filledMoments(prep.tactical_notes?.line?.[line.key], LINE_MOMENTS);
-              const lineDrawing = drawings[`line:${line.key}`];
-              if (moments.length === 0 && (!lineDrawing || lineDrawing.length === 0)) return null;
-              return (
-                <div key={line.key} className="mb-6 break-inside-avoid print:mb-5">
-                  <h2 className="mb-2 font-semibold print:mb-1 print:text-base">Tactiek — {line.label}</h2>
-                  {moments.length > 0 && (
-                    <dl className="grid gap-2 sm:grid-cols-2 print:grid-cols-1 print:gap-1.5">
-                      {moments.map((m) => (
-                        <div key={m.key}>
-                          <dt className="text-xs font-medium text-slate-500 print:text-xs">{m.label}</dt>
-                          <dd className="text-sm text-slate-800 print:text-sm">{prep.tactical_notes!.line[line.key][m.key]}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                  {lineDrawing && lineDrawing.length > 0 && (
-                    <div className="mt-2 print:mt-1.5">
-                      <DrawingThumbnail strokes={lineDrawing} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[170px]" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {chosenSetPieces.length > 0 && (
-            <div className="mb-6 break-inside-avoid print:mb-5">
-              <h2 className="mb-2 font-semibold print:mb-1 print:text-base">Standaardsituaties</h2>
-              <div className="flex flex-col gap-3">
-                {SET_PIECE_CATEGORIES.map((cat) => {
-                  const inCategory = chosenSetPieces.filter((sp) => sp.category === cat);
-                  if (inCategory.length === 0) return null;
-                  return (
-                    <div key={cat}>
-                      <h3 className="mb-1 text-sm font-medium text-slate-700 print:mb-0.5 print:text-sm">
-                        {SET_PIECE_CATEGORY_LABELS[cat]}
-                      </h3>
-                      <div className="grid gap-3 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
-                        {SET_PIECE_SIDES.map((side) => {
-                          const items = inCategory.filter((sp) => sp.side === side);
-                          if (items.length === 0) return null;
-                          return (
-                            <div key={side}>
-                              <span className="mb-0.5 block text-xs text-slate-500 print:text-xs">{SET_PIECE_SIDE_LABELS[side]}</span>
-                              <div className="flex flex-col gap-1.5">
-                                {items.map((sp) => (
-                                  <div key={sp.id}>
-                                    <div className="text-sm font-medium text-slate-800 print:text-sm">{sp.title}</div>
-                                    {sp.description && (
-                                      <p className="text-xs text-slate-600 print:text-xs">{sp.description}</p>
-                                    )}
-                                    {sp.drawing.length > 0 && (
-                                      <div className="mt-1 print:mt-1">
-                                        <DrawingThumbnail strokes={sp.drawing} className="w-full max-w-[140px] rounded-lg border border-slate-200 print:max-w-[110px]" />
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
+            {lineTactics.length > 0 && (
+              <div className="mb-4 break-inside-avoid print:mb-4">
+                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Tactiek per linie</h2>
+                <div className="flex flex-col gap-2">
+                  {lineTactics.map(({ line, moments, drawing }) => (
+                    <div key={line.key} className="rounded-lg border border-slate-200 px-3 py-2 print:border-slate-300">
+                      <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">{line.label}</div>
+                      <div className="grid gap-1.5 sm:grid-cols-2 print:grid-cols-2">
+                        {moments.map((m) => (
+                          <div key={m.key}>
+                            <span className="text-xs font-semibold text-slate-500 print:text-sm">{m.icon} {m.label}: </span>
+                            <span className="text-sm font-medium text-slate-900 print:text-base">
+                              {prep.tactical_notes!.line[line.key][m.key]}
+                            </span>
+                          </div>
+                        ))}
                       </div>
+                      {drawing && drawing.length > 0 && (
+                        <div className="mt-1.5">
+                          <DrawingThumbnail strokes={drawing} className="w-full max-w-[180px] rounded-lg border border-slate-200 print:max-w-[150px]" />
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {chosenSetPieces.length > 0 && (
+              <div className="break-inside-avoid">
+                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Standaardsituaties</h2>
+                <div className="flex flex-col gap-3">
+                  {SET_PIECE_CATEGORIES.map((cat) => {
+                    const inCategory = chosenSetPieces.filter((sp) => sp.category === cat);
+                    if (inCategory.length === 0) return null;
+                    return (
+                      <div key={cat}>
+                        <h3 className="mb-1 text-xs font-bold text-slate-600 print:text-sm">{SET_PIECE_CATEGORY_LABELS[cat]}</h3>
+                        <div className="grid gap-2 sm:grid-cols-2 print:grid-cols-2">
+                          {SET_PIECE_SIDES.map((side) => {
+                            const items = inCategory.filter((sp) => sp.side === side);
+                            if (items.length === 0) return null;
+                            return (
+                              <div key={side}>
+                                <span className="mb-0.5 block text-[10px] font-semibold uppercase text-slate-500 print:text-xs">
+                                  {SET_PIECE_SIDE_LABELS[side]}
+                                </span>
+                                <div className="flex flex-col gap-1.5">
+                                  {items.map((sp) => (
+                                    <div key={sp.id} className="flex items-center gap-2">
+                                      {sp.drawing.length > 0 && (
+                                        <DrawingThumbnail strokes={sp.drawing} className="h-12 w-8 shrink-0 rounded border border-slate-200 print:h-14 print:w-9" />
+                                      )}
+                                      <div className="text-sm font-semibold text-slate-900 print:text-base">{sp.title}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold tracking-wide print:text-sm">{children}</span>
   );
 }

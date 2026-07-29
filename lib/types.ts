@@ -6,7 +6,6 @@ export type Player = {
   birthdate: string | null; // YYYY-MM-DD
   parent_contact: string | null;
   active: boolean;
-  token: string | null; // toegangscode voor het mobiele spelersscherm (/mijn/[token])
   ai_summary: string | null; // door Claude gegenereerd spelersprofiel op basis van stats, belasting en video-observaties
   ai_summary_generated_at: string | null;
 };

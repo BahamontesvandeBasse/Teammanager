@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 import { Match, Player } from "./types";
-import { generateToken } from "./token";
 import { parsePositions } from "./positions";
 
 // Flexibele import-parsers: herkennen kolommen op naam (Sportlink/voetbal.nl
@@ -129,7 +128,6 @@ export function parsePlayersFile(data: ArrayBuffer): ParsedPlayer[] {
       birthdate: birthCol ? toIsoDate(row[birthCol]) : null,
       parent_contact: contactCol ? cellString(row[contactCol]) || null : null,
       active: true,
-      token: generateToken(),
       ai_summary: null,
       ai_summary_generated_at: null,
     });

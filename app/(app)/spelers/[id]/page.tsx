@@ -4,12 +4,28 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { ageFromBirthdate, formatDate, todayIso } from "@/lib/format";
-import { generateToken } from "@/lib/token";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { isTrainingActivity } from "@/lib/training";
 import { Badge, Button, Card, Message, PageTitle, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
-import { Absence, LoadEntry, Match, MatchStat, Message as ChatMessage, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
+import { DrawingThumbnail, TacticsBoardEditor } from "@/components/TacticsBoard";
+import {
+  Absence,
+  DrawingElement,
+  LoadEntry,
+  Match,
+  MatchStat,
+  Player,
+  ScheduleItem,
+  SET_PIECE_CATEGORIES,
+  SET_PIECE_CATEGORY_LABELS,
+  SET_PIECE_SIDE_LABELS,
+  SetPiece,
+  SetPieceCategory,
+  SetPieceSide,
+  VideoLink,
+  VideoNote,
+} from "@/lib/types";
 import { useCanEdit, useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
 
 function formatTimestamp(seconds: number): string {
@@ -33,13 +49,21 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [ownSetPieces, setOwnSetPieces] = useState<SetPiece[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
-  const [chatBody, setChatBody] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
+
+  // ---------- Zelfbediening voor de ingelogde speler zelf ----------
+  const [spCategory, setSpCategory] = useState<SetPieceCategory>(SET_PIECE_CATEGORIES[0]);
+  const [spSide, setSpSide] = useState<SetPieceSide>("attacking");
+  const [spTitle, setSpTitle] = useState("");
+  const [spDescription, setSpDescription] = useState("");
+  const [spDrawing, setSpDrawing] = useState<DrawingElement[]>([]);
+  const [spDrawingOpen, setSpDrawingOpen] = useState(false);
+  const [spBusy, setSpBusy] = useState(false);
+  const [spMsg, setSpMsg] = useState<string | null>(null);
 
   const reload = () =>
     Promise.all([
@@ -51,9 +75,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       api.list("video_notes"),
       api.list("absences"),
       api.list("schedule_items"),
-      api.list("messages"),
+      api.list("set_pieces"),
     ])
-      .then(([players, m, s, l, vl, vn, a, si, msgs]) => {
+      .then(([players, m, s, l, vl, vn, a, si, setPieces]) => {
         const found = players.find((p) => p.id === id) ?? null;
         if (!found) {
           setNotFound(true);
@@ -67,7 +91,11 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         setVideoNotes(vn.filter((x) => x.player_id === id));
         setAbsences(a);
         setScheduleItems(si);
-        setMessages(msgs.filter((x) => x.player_id === id).sort((a, b) => a.created_at.localeCompare(b.created_at)));
+        setOwnSetPieces(
+          setPieces
+            .filter((x) => x.suggested_by_player_id === id)
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        );
       })
       .finally(() => setLoading(false));
 
@@ -86,34 +114,39 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
     await reload();
   }
 
-  async function sendMessage() {
-    if (!chatBody.trim()) return;
-    setChatBusy(true);
-    try {
-      await api.create("messages", {
-        player_id: id,
-        sender: "staff",
-        sender_name: "Staf",
-        body: chatBody.trim(),
-        created_at: new Date().toISOString(),
-      });
-      setChatBody("");
-      await reload();
-    } finally {
-      setChatBusy(false);
+  async function submitSetPiece() {
+    if (!spTitle.trim()) {
+      setSpMsg("Vul een titel in.");
+      return;
     }
-  }
-
-  async function generateLink() {
-    await api.update("players", id, { token: generateToken() });
-    await reload();
-  }
-
-  async function copyLink() {
-    if (!player?.token) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/mijn/${player.token}`);
-    setMsg("Link gekopieerd. Deel 'm bijvoorbeeld via WhatsApp.");
-    setErr(false);
+    setSpBusy(true);
+    try {
+      const res = await fetch("/api/set-pieces/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: spCategory,
+          side: spSide,
+          title: spTitle.trim(),
+          description: spDescription.trim(),
+          drawing: spDrawing,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? "Versturen mislukt");
+      }
+      setSpMsg("Bedankt! De staf bekijkt je voorstel.");
+      setSpTitle("");
+      setSpDescription("");
+      setSpDrawing([]);
+      setSpDrawingOpen(false);
+      await reload();
+    } catch (e) {
+      setSpMsg((e as Error).message);
+    } finally {
+      setSpBusy(false);
+    }
   }
 
   async function generateSummary() {
@@ -156,6 +189,8 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
     );
   }
 
+  const isOwnPlayer = role === "speler" && ownPlayerId === id;
+
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const totals = stats.reduce(
     (t, s) => ({
@@ -194,6 +229,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
 
   const today = todayIso();
+
   // Alleen data meetellen op dagen die ook echt een geplande training waren — anders kan een
   // per ongeluk dubbel of los ingevoerde belasting-registratie de teller boven het totaal duwen.
   const trainingDates = new Set(
@@ -224,8 +260,98 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
       <AbsenceBanner status={playerAbsenceStatus(id, absences, todayIso())} />
 
+      {isOwnPlayer && (
+        <>
+          <Card className="mb-6">
+            <h2 className="mb-1 font-semibold">Spelhervattingen 🚩</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Heb je een idee voor een corner, vrije trap, aftrap, inworp of keeperbal? Stel &apos;m voor — de staf bekijkt en keurt goed.
+            </p>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  className={inputCls}
+                  value={spCategory}
+                  onChange={(e) => setSpCategory(e.target.value as SetPieceCategory)}
+                >
+                  {SET_PIECE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{SET_PIECE_CATEGORY_LABELS[c]}</option>
+                  ))}
+                </select>
+                <div className="flex gap-1">
+                  {(["attacking", "defending"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSpSide(s)}
+                      className={`flex-1 rounded-lg border py-1.5 text-xs font-medium ${
+                        spSide === s ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600"
+                      }`}
+                    >
+                      {SET_PIECE_SIDE_LABELS[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input
+                className={inputCls}
+                placeholder="Titel, bv. 'Korte corner naar de rand'"
+                value={spTitle}
+                onChange={(e) => setSpTitle(e.target.value)}
+              />
+              <textarea
+                className={`${inputCls} py-2`}
+                rows={2}
+                placeholder="Omschrijving (optioneel)"
+                value={spDescription}
+                onChange={(e) => setSpDescription(e.target.value)}
+              />
+
+              {spDrawingOpen ? (
+                <div className="rounded-lg border border-slate-200 p-2">
+                  <TacticsBoardEditor elements={spDrawing} onChange={setSpDrawing} />
+                  <button onClick={() => setSpDrawingOpen(false)} className="mt-2 text-xs text-slate-500 hover:underline">
+                    tekening inklappen
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSpDrawingOpen(true)}
+                  className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-500"
+                >
+                  {spDrawing.length > 0 ? "✏️ Tekening bewerken" : "🎨 Tekening toevoegen (optioneel)"}
+                </button>
+              )}
+
+              <Button onClick={submitSetPiece} disabled={spBusy || !spTitle.trim()}>
+                {spBusy ? "Bezig…" : "Voorstel versturen"}
+              </Button>
+              {spMsg && <div className="text-xs text-slate-600">{spMsg}</div>}
+            </div>
+
+            {ownSetPieces.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jouw voorstellen</h3>
+                <div className="flex flex-col gap-2">
+                  {ownSetPieces.map((sp) => (
+                    <div key={sp.id} className="flex items-center gap-2 text-xs text-slate-600">
+                      {sp.drawing.length > 0 && (
+                        <DrawingThumbnail strokes={sp.drawing} className="h-9 w-6 shrink-0 rounded border border-slate-200" />
+                      )}
+                      <span className="flex-1">{sp.title}</span>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 font-medium ${sp.approved ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                        {sp.approved ? "goedgekeurd" : "voorgesteld"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
       <Card className="mb-6">
-        <h2 className="mb-3 font-semibold">Contact &amp; spelerslink</h2>
+        <h2 className="mb-3 font-semibold">Contact</h2>
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Contact</label>
@@ -247,20 +373,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
               onBlur={(e) => e.target.value !== (player.birthdate ?? "") && updateBirthdate(e.target.value)}
             />
           </div>
-          {canEdit && (
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Mobiel invulscherm</label>
-            {player.token ? (
-              <Button variant="secondary" onClick={copyLink}>📋 Kopieer link</Button>
-            ) : (
-              <Button variant="secondary" onClick={generateLink}>Genereer link</Button>
-            )}
-          </div>
-          )}
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          De link geeft toegang tot het mobiele invulscherm (belasting/RPE en berichten) — geen inloggen nodig, gewoon delen als tekstbericht.
-        </p>
       </Card>
 
       {canEdit && (
@@ -412,41 +525,6 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         )}
       </Card>
 
-      {canEdit && (
-        <Card className="mt-6">
-          <h2 className="mb-1 font-semibold">Berichten met {player.name} 💬</h2>
-          <p className="mb-3 text-xs text-slate-500">
-            {player.name} kan via het mobiele invulscherm berichten sturen; hier lees en beantwoord je ze.
-          </p>
-          <div className="mb-3 flex max-h-80 flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
-            {messages.length === 0 && (
-              <p className="text-sm text-slate-400">Nog geen berichten met deze speler.</p>
-            )}
-            {messages.map((m) => (
-              <div key={m.id} className={`flex ${m.sender === "staff" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                    m.sender === "staff" ? "bg-rose-600 text-white" : "bg-white border border-slate-200"
-                  }`}
-                >
-                  {m.sender === "player" && <div className="mb-0.5 text-xs font-semibold opacity-70">{m.sender_name}</div>}
-                  {m.body}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input
-              className={`${inputCls} flex-1`}
-              placeholder="Typ een bericht…"
-              value={chatBody}
-              onChange={(e) => setChatBody(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            />
-            <Button onClick={sendMessage} disabled={chatBusy || !chatBody.trim()}>Stuur</Button>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { parsePlayersFile } from "@/lib/parse";
-import { generateToken } from "@/lib/token";
 import { POSITION_PRESETS } from "@/lib/positions";
 import { Badge, Button, Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { AbsenceChip } from "@/components/PlayerAbsence";
@@ -106,7 +105,6 @@ export default function SpelersPage() {
       birthdate: null,
       parent_contact: null,
       active: true,
-      token: generateToken(),
       ai_summary: null,
       ai_summary_generated_at: null,
     });
