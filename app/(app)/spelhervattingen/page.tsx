@@ -17,6 +17,72 @@ import {
 } from "@/lib/types";
 import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
+// Inline bewerkformulier voor staf — hergebruikt voor zowel suggesties als
+// al goedgekeurde spelhervattingen, zodat de staf de inhoud van een
+// voorstel kan aanpassen (i.p.v. alleen goedkeuren/verwijderen).
+function SetPieceEditForm({
+  sp,
+  onSave,
+  onCancel,
+}: {
+  sp: SetPiece;
+  onSave: (patch: Pick<SetPiece, "category" | "side" | "title" | "description" | "drawing">) => void;
+  onCancel: () => void;
+}) {
+  const [category, setCategory] = useState<SetPieceCategory>(sp.category);
+  const [side, setSide] = useState<SetPieceSide>(sp.side);
+  const [title, setTitle] = useState(sp.title);
+  const [description, setDescription] = useState(sp.description);
+  const [drawing, setDrawing] = useState<DrawingElement[]>(sp.drawing);
+
+  return (
+    <div className="rounded-lg border border-rose-200 bg-rose-50/40 p-3">
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Tekenen (optioneel)</label>
+          <TacticsBoardEditor elements={drawing} onChange={setDrawing} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <select
+              className={`${inputCls} flex-1`}
+              value={category}
+              onChange={(e) => setCategory(e.target.value as SetPieceCategory)}
+            >
+              {SET_PIECE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{SET_PIECE_CATEGORY_LABELS[c]}</option>
+              ))}
+            </select>
+            <select className={`${inputCls} flex-1`} value={side} onChange={(e) => setSide(e.target.value as SetPieceSide)}>
+              {SET_PIECE_SIDES.map((s) => (
+                <option key={s} value={s}>{SET_PIECE_SIDE_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+          <input className={`${inputCls} w-full`} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titel" />
+          <textarea
+            className={`${inputCls} w-full`}
+            rows={3}
+            placeholder="Wie staat waar, wie neemt 'm, looplijnen…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button
+              onClick={() =>
+                onSave({ category, side, title: title.trim(), description: description.trim(), drawing })
+              }
+            >
+              Opslaan
+            </Button>
+            <Button variant="secondary" onClick={onCancel}>Annuleren</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SpelhervattingenPage() {
   const canEdit = useCanEdit();
   const role = useRole();
@@ -38,6 +104,8 @@ export default function SpelhervattingenPage() {
   const [suggestDescription, setSuggestDescription] = useState("");
   const [suggestDrawing, setSuggestDrawing] = useState<DrawingElement[]>([]);
   const [suggestBusy, setSuggestBusy] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const reload = () =>
     Promise.all([api.list("set_pieces"), api.list("players")])
@@ -127,6 +195,22 @@ export default function SpelhervattingenPage() {
     await reload();
   }
 
+  async function saveEdit(
+    sp: SetPiece,
+    patch: Pick<SetPiece, "category" | "side" | "title" | "description" | "drawing">
+  ) {
+    if (!patch.title) {
+      setMsg("Vul een titel in.");
+      setErr(true);
+      return;
+    }
+    await api.update("set_pieces", sp.id, patch);
+    setEditingId(null);
+    await reload();
+    setMsg("Spelhervatting bijgewerkt.");
+    setErr(false);
+  }
+
   async function remove(sp: SetPiece) {
     if (!confirm(`"${sp.title}" verwijderen?`)) return;
     await api.remove("set_pieces", sp.id);
@@ -161,34 +245,46 @@ export default function SpelhervattingenPage() {
             Voorgesteld door spelers of staf — keur goed om beschikbaar te maken bij een wedstrijdvoorbereiding, of verwijder.
           </p>
           <div className="flex flex-col gap-2">
-            {suggestions.map((sp) => (
-              <div key={sp.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge color="amber">{SET_PIECE_CATEGORY_LABELS[sp.category]}</Badge>
-                      <Badge color={sp.side === "attacking" ? "green" : "blue"}>{SET_PIECE_SIDE_LABELS[sp.side]}</Badge>
-                      <span className="text-xs text-slate-500">voorgesteld door {suggesterName(sp)}</span>
-                    </div>
-                    <div className="mt-1 font-medium">{sp.title}</div>
-                    {sp.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">{sp.description}</p>}
-                    {sp.drawing.length > 0 && (
-                      <div className="mt-2">
-                        <DrawingThumbnail strokes={sp.drawing} className="w-full max-w-[160px] rounded-lg border border-slate-200" />
+            {suggestions.map((sp) =>
+              editingId === sp.id ? (
+                <SetPieceEditForm
+                  key={sp.id}
+                  sp={sp}
+                  onSave={(patch) => saveEdit(sp, patch)}
+                  onCancel={() => setEditingId(null)}
+                />
+              ) : (
+                <div key={sp.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge color="amber">{SET_PIECE_CATEGORY_LABELS[sp.category]}</Badge>
+                        <Badge color={sp.side === "attacking" ? "green" : "blue"}>{SET_PIECE_SIDE_LABELS[sp.side]}</Badge>
+                        <span className="text-xs text-slate-500">voorgesteld door {suggesterName(sp)}</span>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 gap-3">
-                    <button className="text-xs font-medium text-green-700 hover:underline" onClick={() => approve(sp)}>
-                      ✓ Goedkeuren
-                    </button>
-                    <button className="text-xs text-red-500 hover:underline" onClick={() => remove(sp)}>
-                      verwijderen
-                    </button>
+                      <div className="mt-1 font-medium">{sp.title}</div>
+                      {sp.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-700">{sp.description}</p>}
+                      {sp.drawing.length > 0 && (
+                        <div className="mt-2">
+                          <DrawingThumbnail strokes={sp.drawing} className="w-full max-w-[160px] rounded-lg border border-slate-200" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-3">
+                      <button className="text-xs font-medium text-green-700 hover:underline" onClick={() => approve(sp)}>
+                        ✓ Goedkeuren
+                      </button>
+                      <button className="text-xs font-medium text-slate-600 hover:underline" onClick={() => setEditingId(sp.id)}>
+                        bewerken
+                      </button>
+                      <button className="text-xs text-red-500 hover:underline" onClick={() => remove(sp)}>
+                        verwijderen
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
           </div>
         </Card>
       )}
@@ -328,24 +424,41 @@ export default function SpelhervattingenPage() {
                       <p className="text-xs text-slate-500">Nog geen spelhervattingen.</p>
                     ) : (
                       <div className="flex flex-col gap-2">
-                        {items.map((sp) => (
-                          <div key={sp.id} className="rounded-lg border border-slate-200 p-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="font-medium">{sp.title}</div>
-                              {canEdit && (
-                                <button className="shrink-0 text-xs text-red-500 hover:underline" onClick={() => remove(sp)}>
-                                  verwijderen
-                                </button>
+                        {items.map((sp) =>
+                          editingId === sp.id ? (
+                            <SetPieceEditForm
+                              key={sp.id}
+                              sp={sp}
+                              onSave={(patch) => saveEdit(sp, patch)}
+                              onCancel={() => setEditingId(null)}
+                            />
+                          ) : (
+                            <div key={sp.id} className="rounded-lg border border-slate-200 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="font-medium">{sp.title}</div>
+                                {canEdit && (
+                                  <div className="flex shrink-0 gap-2">
+                                    <button className="text-xs font-medium text-slate-600 hover:underline" onClick={() => setEditingId(sp.id)}>
+                                      bewerken
+                                    </button>
+                                    <button className="text-xs text-red-500 hover:underline" onClick={() => remove(sp)}>
+                                      verwijderen
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              {sp.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-600">{sp.description}</p>}
+                              {sp.suggested_by === "player" && (
+                                <p className="mt-1 text-xs text-slate-400">voorgesteld door {suggesterName(sp)}</p>
+                              )}
+                              {sp.drawing.length > 0 && (
+                                <div className="mt-2">
+                                  <DrawingThumbnail strokes={sp.drawing} className="w-full max-w-[160px] rounded-lg border border-slate-200" />
+                                </div>
                               )}
                             </div>
-                            {sp.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-600">{sp.description}</p>}
-                            {sp.drawing.length > 0 && (
-                              <div className="mt-2">
-                                <DrawingThumbnail strokes={sp.drawing} className="w-full max-w-[160px] rounded-lg border border-slate-200" />
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          )
+                        )}
                       </div>
                     )}
                   </div>
