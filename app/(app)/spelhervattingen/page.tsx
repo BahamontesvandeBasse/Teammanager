@@ -141,6 +141,7 @@ export default function SpelhervattingenPage() {
         approved: true,
         suggested_by: "staff",
         suggested_by_player_id: null,
+        created_by_name: null, // wordt server-side gezet uit de sessie
         created_at: new Date().toISOString(),
       });
       resetForm();
@@ -223,7 +224,7 @@ export default function SpelhervattingenPage() {
   const approved = setPieces.filter((sp) => sp.approved);
 
   function suggesterName(sp: SetPiece): string {
-    if (sp.suggested_by === "staff") return "Staf";
+    if (sp.suggested_by === "staff") return sp.created_by_name ?? "Staf (onbekend)";
     return players.find((p) => p.id === sp.suggested_by_player_id)?.name ?? "Speler";
   }
 
@@ -231,7 +232,7 @@ export default function SpelhervattingenPage() {
     <div>
       <PageTitle
         title="Spelhervattingen"
-        subtitle="Corners, vrije trappen, aftrap, inworp en keeperbal — los van de wedstrijdvoorbereiding. Spelers en staf kunnen voorstellen; de staf keurt goed of verwijdert. Kies vervolgens per wedstrijd welke gelden bij Wedstrijdvoorbereiding."
+        subtitle="Doe hier je suggestie voor een spelhervatting."
       />
 
       <Message text={msg} error={err} />
@@ -453,8 +454,10 @@ export default function SpelhervattingenPage() {
                                 )}
                               </div>
                               {sp.description && <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-600">{sp.description}</p>}
-                              {sp.suggested_by === "player" && (
-                                <p className="mt-1 text-xs text-slate-400">voorgesteld door {suggesterName(sp)}</p>
+                              {canEdit && (
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {sp.suggested_by === "player" ? "voorgesteld door" : "toegevoegd door"} {suggesterName(sp)}
+                                </p>
                               )}
                               {sp.drawing.length > 0 && (
                                 <div className="mt-2">

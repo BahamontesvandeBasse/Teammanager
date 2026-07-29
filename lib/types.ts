@@ -289,6 +289,7 @@ export type SetPiece = {
   approved: boolean; // false = nog een suggestie, wacht op goedkeuring door de staf
   suggested_by: "staff" | "player";
   suggested_by_player_id: string | null; // gezet wanneer suggested_by === "player"
+  created_by_name: string | null; // naam van het staflid, gezet server-side uit de sessie wanneer suggested_by === "staff"
   created_at: string;
 };
 
