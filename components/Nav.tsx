@@ -7,66 +7,35 @@ import { signOut } from "next-auth/react";
 import { isAdmin, Role } from "@/lib/auth/roles";
 
 type NavItem = { href: string; label: string; icon: string };
-type NavGroup = { label: string; icon: string; items: NavItem[] };
-type NavEntry = NavItem | NavGroup;
 
-function isGroup(entry: NavEntry): entry is NavGroup {
-  return "items" in entry;
-}
-
-const NAV: NavEntry[] = [
+// Bovenaan staat alles wat spelers moeten zien (Spelers, Programma,
+// Resultaten, Spelhervattingen); daarna de staf-georiënteerde pagina's.
+// Geen samengevoegde/inklapbare groepen meer — één platte lijst.
+const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "🏠" },
   { href: "/spelers", label: "Spelers", icon: "👥" },
-  {
-    label: "Programma",
-    icon: "📅",
-    items: [
-      { href: "/programma", label: "Speelprogramma", icon: "📅" },
-      { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋" },
-      { href: "/spelhervattingen", label: "Spelhervattingen", icon: "🚩" },
-      { href: "/schema", label: "Was & rijden", icon: "🚗" },
-    ],
-  },
+  { href: "/programma", label: "Programma", icon: "📅" },
   { href: "/resultaten", label: "Resultaten", icon: "⚽" },
-  {
-    label: "Training",
-    icon: "🎯",
-    items: [
-      { href: "/training", label: "Trainingsprogramma", icon: "🎯" },
-      { href: "/belasting", label: "Belasting", icon: "❤️" },
-    ],
-  },
+  { href: "/spelhervattingen", label: "Spelhervattingen", icon: "🚩" },
+  { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋" },
+  { href: "/schema", label: "Was & rijden", icon: "🚗" },
+  { href: "/training", label: "Trainingsprogramma", icon: "🎯" },
+  { href: "/belasting", label: "Belasting", icon: "❤️" },
 ];
 
 function isActiveHref(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-function groupContainsActive(group: NavGroup, pathname: string): boolean {
-  return group.items.some((i) => isActiveHref(pathname, i.href));
-}
-
 export default function Nav({ role, loginActive }: { role: Role; loginActive: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  // Alleen expliciete gebruikersacties (klik op een groep) — automatisch openklappen
-  // van de groep met de actieve pagina wordt hieronder puur uit `pathname` afgeleid,
-  // zodat we geen state-in-effect nodig hebben.
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
 
   const nav = isAdmin(role)
     ? [...NAV, { href: "/admin/gebruikers", label: "Gebruikers", icon: "🔑" }]
     : NAV;
 
-  function isGroupOpen(group: NavGroup): boolean {
-    return group.label in overrides ? overrides[group.label] : groupContainsActive(group, pathname);
-  }
-
-  function toggleGroup(group: NavGroup) {
-    setOverrides((prev) => ({ ...prev, [group.label]: !isGroupOpen(group) }));
-  }
-
-  function renderItem(item: NavItem, indent = false) {
+  function renderItem(item: NavItem) {
     const active = isActiveHref(pathname, item.href);
     return (
       <Link
@@ -74,8 +43,8 @@ export default function Nav({ role, loginActive }: { role: Role; loginActive: bo
         href={item.href}
         onClick={() => setOpen(false)}
         className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-          indent ? "ml-3" : ""
-        } ${active ? "bg-rose-600 text-white" : "text-neutral-300 hover:bg-neutral-800 hover:text-white"}`}
+          active ? "bg-rose-600 text-white" : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+        }`}
       >
         <span aria-hidden>{item.icon}</span>
         {item.label}
@@ -83,31 +52,7 @@ export default function Nav({ role, loginActive }: { role: Role; loginActive: bo
     );
   }
 
-  function renderGroup(group: NavGroup) {
-    const expanded = isGroupOpen(group);
-    const active = groupContainsActive(group, pathname);
-    return (
-      <div key={group.label}>
-        <button
-          onClick={() => toggleGroup(group)}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-            active && !expanded ? "text-white" : "text-neutral-300"
-          } hover:bg-neutral-800 hover:text-white`}
-        >
-          <span aria-hidden>{group.icon}</span>
-          <span className="flex-1 text-left">{group.label}</span>
-          <span className={`text-xs transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden>
-            ›
-          </span>
-        </button>
-        {expanded && (
-          <div className="mt-1 flex flex-col gap-1">{group.items.map((i) => renderItem(i, true))}</div>
-        )}
-      </div>
-    );
-  }
-
-  const links = nav.map((entry) => (isGroup(entry) ? renderGroup(entry) : renderItem(entry)));
+  const links = nav.map(renderItem);
 
   const logoutButton = loginActive && (
     <button
