@@ -11,7 +11,7 @@ import { ageFromBirthdate, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { isTrainingActivity } from "@/lib/training";
 import { Absence, LoadEntry, Player, ScheduleItem, StaffMember } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
 
 function sortPlayers(list: Player[]): Player[] {
   return [...list].sort((a, b) => a.name.localeCompare(b.name, "nl"));
@@ -32,6 +32,8 @@ const JERSEY_STYLE = {
 export default function SpelersPage() {
   const router = useRouter();
   const canEdit = useCanEdit();
+  const role = useRole();
+  const ownPlayerId = useOwnPlayerId();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -290,7 +292,7 @@ export default function SpelersPage() {
                   )}
                 </div>
 
-                {totalTrainings > 0 && (
+                {totalTrainings > 0 && (role !== "speler" || ownPlayerId === p.id) && (
                   <div onClick={(e) => e.stopPropagation()}>
                     <Badge color="slate">🏃 {attendedTrainingsFor(p.id)}/{totalTrainings} trainingen</Badge>
                   </div>

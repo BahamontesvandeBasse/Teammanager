@@ -7,6 +7,7 @@ import { computeMatchTimes } from "@/lib/schedule";
 import { ageFromBirthdate, formatDate, todayIso } from "@/lib/format";
 import { Badge, Card, PageTitle } from "@/components/ui";
 import { Absence, CarpoolDuty, Club, Match, Player, StaffMember, WashDuty } from "@/lib/types";
+import { useRole } from "@/lib/auth/RoleProvider";
 
 // Tenue Sv Steenwijkerwold: rood shirt met 2 diagonale zwarte banen.
 const JERSEY_STYLE = {
@@ -23,6 +24,7 @@ function isBirthdayToday(birthdate: string | null, today: string): boolean {
 }
 
 export default function DashboardPage() {
+  const role = useRole();
   const [players, setPlayers] = useState<Player[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -106,6 +108,7 @@ export default function DashboardPage() {
         <NextMatchCard
           match={next}
           clubs={clubs}
+          hidePrepLink={role === "speler"}
           washName={wash.filter((w) => w.match_id === next.id).map((w) => playerName(w.player_id))[0]}
           driverNames={carpool.filter((c) => c.match_id === next.id).map((c) => playerName(c.player_id))}
           absentNames={absences
@@ -189,61 +192,70 @@ function NextMatchCard({
   washName,
   driverNames,
   absentNames,
+  hidePrepLink,
 }: {
   match: Match;
   clubs: Club[];
   washName?: string;
   driverNames: string[];
   absentNames: string[];
+  hidePrepLink?: boolean;
 }) {
   const t = computeMatchTimes(match, clubs);
   const isAway = match.home_away === "away";
+
+  const content = (
+    <Card className="border-rose-200 bg-gradient-to-br from-rose-50 to-white transition-shadow hover:shadow-md">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">
+            Eerstvolgende wedstrijd
+          </div>
+          <h2 className="mt-1 text-xl font-bold">
+            {isAway ? `${match.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${match.opponent}`}
+          </h2>
+          <p className="text-sm text-slate-500">
+            {formatDate(match.date)} · aftrap {match.kickoff_time}
+          </p>
+        </div>
+        <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uitwedstrijd" : "Thuiswedstrijd"}</Badge>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label={isAway ? "Aanwezig (bij tegenstander)" : "Aanwezig"} value={t.arrive ?? "—"} />
+        {isAway && (
+          <Stat
+            label="Vertrek eigen sportpark"
+            value={t.depart ?? "reistijd invullen"}
+            warn={!t.depart}
+          />
+        )}
+        <Stat label="Wasbeurt 🧺" value={washName ?? "nog niet gepland"} warn={!washName} />
+        {isAway && (
+          <Stat
+            label={`Rijders 🚗 (${driverNames.length} auto's)`}
+            value={driverNames.length > 0 ? driverNames.join(", ") : "nog niet gepland"}
+            warn={driverNames.length === 0}
+          />
+        )}
+      </div>
+
+      {absentNames.length > 0 && (
+        <div className="mt-4 border-t border-rose-100 pt-3">
+          <div className="text-xs text-slate-500">Afwezig 🚫</div>
+          <div className="mt-0.5 font-semibold text-rose-700">{absentNames.join(", ")}</div>
+        </div>
+      )}
+
+      {!hidePrepLink && <div className="mt-4 text-xs font-medium text-rose-700">Bekijk voorbereiding →</div>}
+    </Card>
+  );
+
+  // Spelers mogen wedstrijdvoorbereiding niet zien, dus die kaart is voor hen niet klikbaar.
+  if (hidePrepLink) return content;
   return (
     <Link href={`/wedstrijden?match=${match.id}`} className="block">
-      <Card className="border-rose-200 bg-gradient-to-br from-rose-50 to-white transition-shadow hover:shadow-md">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-rose-700">
-              Eerstvolgende wedstrijd
-            </div>
-            <h2 className="mt-1 text-xl font-bold">
-              {isAway ? `${match.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${match.opponent}`}
-            </h2>
-            <p className="text-sm text-slate-500">
-              {formatDate(match.date)} · aftrap {match.kickoff_time}
-            </p>
-          </div>
-          <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uitwedstrijd" : "Thuiswedstrijd"}</Badge>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label={isAway ? "Aanwezig (bij tegenstander)" : "Aanwezig"} value={t.arrive ?? "—"} />
-          {isAway && (
-            <Stat
-              label="Vertrek eigen sportpark"
-              value={t.depart ?? "reistijd invullen"}
-              warn={!t.depart}
-            />
-          )}
-          <Stat label="Wasbeurt 🧺" value={washName ?? "nog niet gepland"} warn={!washName} />
-          {isAway && (
-            <Stat
-              label={`Rijders 🚗 (${driverNames.length} auto's)`}
-              value={driverNames.length > 0 ? driverNames.join(", ") : "nog niet gepland"}
-              warn={driverNames.length === 0}
-            />
-          )}
-        </div>
-
-        {absentNames.length > 0 && (
-          <div className="mt-4 border-t border-rose-100 pt-3">
-            <div className="text-xs text-slate-500">Afwezig 🚫</div>
-            <div className="mt-0.5 font-semibold text-rose-700">{absentNames.join(", ")}</div>
-          </div>
-        )}
-
-        <div className="mt-4 text-xs font-medium text-rose-700">Bekijk voorbereiding →</div>
-      </Card>
+      {content}
     </Link>
   );
 }
@@ -257,7 +269,7 @@ function LastMatchCard({ match }: { match: Match }) {
   const resultColor = result === "win" ? "green" : result === "loss" ? "red" : "amber";
 
   return (
-    <Link href={`/wedstrijden?match=${match.id}`} className="block">
+    <Link href={`/resultaten?match=${match.id}`} className="block">
       <Card className="mt-6 transition-shadow hover:shadow-md">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

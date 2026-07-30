@@ -90,3 +90,50 @@ export const inputCls =
 
 export const thCls = "px-3 py-2 text-left text-xs font-semibold uppercase text-slate-600";
 export const tdCls = "px-3 py-2 text-sm";
+
+export type SparklineColor = "red" | "amber" | "green" | "slate";
+
+const SPARKLINE_STROKE: Record<SparklineColor, string> = {
+  red: "#dc2626",
+  amber: "#d97706",
+  green: "#059669",
+  slate: "#94a3b8",
+};
+
+// Simpele lijn van de laatste weken belasting — geen assen/cijfers, alleen het verloop.
+// Gedeeld tussen de Belasting-pagina (per speler in het teamoverzicht) en het
+// spelersprofiel (eigen trend, kleine visuele weergave i.p.v. alleen tekst).
+export function Sparkline({ values, color }: { values: number[]; color: SparklineColor }) {
+  if (values.length === 0) return <span className="text-xs text-slate-500">–</span>;
+  if (values.length === 1) {
+    return (
+      <svg width={80} height={24}>
+        <circle cx={40} cy={12} r={3} fill={SPARKLINE_STROKE[color]} />
+      </svg>
+    );
+  }
+
+  const w = 80;
+  const h = 24;
+  const pad = 3;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const stepX = (w - pad * 2) / (values.length - 1);
+  const points = values
+    .map((v, i) => {
+      const x = pad + i * stepX;
+      const y = h - pad - ((v - min) / range) * (h - pad * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const lastX = pad + (values.length - 1) * stepX;
+  const lastY = h - pad - ((values[values.length - 1] - min) / range) * (h - pad * 2);
+
+  return (
+    <svg width={w} height={h}>
+      <polyline points={points} fill="none" stroke={SPARKLINE_STROKE[color]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastX} cy={lastY} r={2.5} fill={SPARKLINE_STROKE[color]} />
+    </svg>
+  );
+}

@@ -67,6 +67,8 @@ const TODAY = () => new Date().toISOString().slice(0, 10);
  *   op minutes_played > 0) elders in de app correct blijven werken zonder de
  *   echte minuten prijs te geven.
  * - "speler" ziet daarnaast wedstrijdvoorbereiding pas nadat de wedstrijd is gespeeld.
+ * - "speler" ziet alleen zijn/haar eigen belasting (load_entries), nooit die
+ *   van teamgenoten — ook niet via een rechtstreekse API-call.
  */
 export async function redactForRole(entity: EntityName, rows: Row[], role: Role): Promise<Row[]> {
   if (role !== "speler" && role !== "toeschouwer") return rows;
@@ -88,6 +90,11 @@ export async function redactForRole(entity: EntityName, rows: Row[], role: Role)
       matches.filter((m) => typeof m.date === "string" && m.date <= today).map((m) => m.id)
     );
     return rows.filter((r) => playedMatchIds.has(r.match_id as string));
+  }
+
+  if (entity === "load_entries") {
+    const ownPlayerId = await getSessionPlayerId();
+    return rows.filter((r) => r.player_id === ownPlayerId);
   }
 
   return rows;

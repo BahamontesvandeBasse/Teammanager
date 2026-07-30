@@ -33,7 +33,7 @@ import {
   WashDuty,
   emptyTacticalNotes,
 } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 function drawingLabel(key: string): string {
   if (key === "team") return "Team-niveau";
@@ -131,6 +131,7 @@ export default function WedstrijdenPage() {
 
 function WedstrijdenPageInner() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const searchParams = useSearchParams();
   const preselectMatch = searchParams.get("match");
 
@@ -423,6 +424,17 @@ function WedstrijdenPageInner() {
   }
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+
+  // Spelers zien opstelling/coachopmerkingen van gespeelde wedstrijden al via
+  // Resultaten — wedstrijdvoorbereiding zelf is niet voor hen bedoeld.
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Wedstrijdvoorbereiding is niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
 
   const selected = matches.find((m) => m.id === selectedMatch);
 

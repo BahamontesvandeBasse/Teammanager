@@ -8,9 +8,9 @@ import {
 import { api } from "@/lib/api";
 import { isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
-import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
+import { Badge, Button, Card, Message, PageTitle, Sparkline, inputCls, tdCls, thCls } from "@/components/ui";
 import { Absence, LoadEntry, Match, Player, ScheduleItem } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 type LoadDraft = {
   minutes: string;
@@ -40,6 +40,7 @@ function addDaysIso(iso: string, days: number): string {
 
 export default function BelastingPage() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const [players, setPlayers] = useState<Player[]>([]);
   const [entries, setEntries] = useState<LoadEntry[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -365,6 +366,17 @@ export default function BelastingPage() {
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
+  // Spelers zien hun eigen belasting op hun spelersprofiel — de belasting van
+  // teamgenoten en het invoerscherm zijn niet voor hen bedoeld.
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Belasting is niet beschikbaar voor spelers — bekijk je eigen gegevens op je spelersprofiel." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageTitle
@@ -450,8 +462,7 @@ export default function BelastingPage() {
                 <th className={thCls}>Afwezig</th>
                 <th className={thCls}>Minuten</th>
                 <th className={thCls}>RPE (1–10)</th>
-                <th className={thCls}>Vermoeidheid (1–10)</th>
-                <th className={thCls}>Spierpijn (1–10)</th>
+                <th className={thCls}>Herstel (vermoeidheid/spierpijn)</th>
                 <th className={thCls}>Blessure</th>
               </tr>
             </thead>
@@ -473,12 +484,14 @@ export default function BelastingPage() {
                         disabled={d.absent} onChange={(e) => setDraft(p.id, "rpe", e.target.value)} />
                     </td>
                     <td className={tdCls}>
-                      <input type="number" min={1} max={10} className={`${inputCls} w-20`} value={d.fatigue} placeholder="—"
-                        disabled={d.absent} onChange={(e) => setDraft(p.id, "fatigue", e.target.value)} />
-                    </td>
-                    <td className={tdCls}>
-                      <input type="number" min={1} max={10} className={`${inputCls} w-20`} value={d.soreness} placeholder="—"
-                        disabled={d.absent} onChange={(e) => setDraft(p.id, "soreness", e.target.value)} />
+                      <div className="flex items-center gap-1">
+                        <input type="number" min={1} max={10} className={`${inputCls} w-16`} value={d.fatigue} placeholder="😴"
+                          title="Vermoeidheid"
+                          disabled={d.absent} onChange={(e) => setDraft(p.id, "fatigue", e.target.value)} />
+                        <input type="number" min={1} max={10} className={`${inputCls} w-16`} value={d.soreness} placeholder="💪"
+                          title="Spierpijn"
+                          disabled={d.absent} onChange={(e) => setDraft(p.id, "soreness", e.target.value)} />
+                      </div>
                     </td>
                     <td className={tdCls}>
                       <div className="flex items-center gap-1">
@@ -613,8 +626,7 @@ export default function BelastingPage() {
                       <th className={thCls}>Minuten</th>
                       <th className={thCls}>RPE</th>
                       <th className={thCls}>Belasting</th>
-                      <th className={thCls}>Vermoeidheid</th>
-                      <th className={thCls}>Spierpijn</th>
+                      <th className={thCls}>Herstel</th>
                       <th className={thCls}>Blessure</th>
                       <th className={thCls}></th>
                     </tr>
@@ -624,7 +636,7 @@ export default function BelastingPage() {
                       <tr key={e.id} className={`border-b border-slate-100 ${e.absent ? "opacity-60" : ""}`}>
                         <td className={`${tdCls} font-medium`}>{players.find((p) => p.id === e.player_id)?.name ?? "—"}</td>
                         {e.absent ? (
-                          <td className={tdCls} colSpan={5}>
+                          <td className={tdCls} colSpan={4}>
                             <Badge color="slate">🚫 Afwezig</Badge>
                           </td>
                         ) : (
@@ -632,8 +644,12 @@ export default function BelastingPage() {
                             <td className={tdCls}>{e.minutes}</td>
                             <td className={tdCls}>{e.rpe}</td>
                             <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
-                            <td className={tdCls}>{e.fatigue ? <ScaleBadge value={e.fatigue} /> : "—"}</td>
-                            <td className={tdCls}>{e.soreness ? <ScaleBadge value={e.soreness} /> : "—"}</td>
+                            <td className={tdCls}>
+                              <div className="flex items-center gap-1">
+                                {e.fatigue ? <ScaleBadge value={e.fatigue} icon="😴" /> : "—"}
+                                {e.soreness ? <ScaleBadge value={e.soreness} icon="💪" /> : "—"}
+                              </div>
+                            </td>
                             <td className={tdCls}>
                               {e.injury_flag ? (
                                 <div>
@@ -669,51 +685,9 @@ export default function BelastingPage() {
 }
 
 // Zelfde richting als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht.
-function ScaleBadge({ value }: { value: number }) {
+function ScaleBadge({ value, icon }: { value: number; icon?: string }) {
   const bad = value >= 7;
   const ok = value >= 5 && value <= 6;
-  return <Badge color={bad ? "red" : ok ? "amber" : "green"}>{value}/10</Badge>;
+  return <Badge color={bad ? "red" : ok ? "amber" : "green"}>{icon ? `${icon} ` : ""}{value}/10</Badge>;
 }
 
-const SPARKLINE_STROKE: Record<"red" | "amber" | "green" | "slate", string> = {
-  red: "#dc2626",
-  amber: "#d97706",
-  green: "#059669",
-  slate: "#94a3b8",
-};
-
-// Simpele lijn van de laatste weken belasting per speler — geen assen/cijfers, alleen het verloop.
-function Sparkline({ values, color }: { values: number[]; color: "red" | "amber" | "green" | "slate" }) {
-  if (values.length === 0) return <span className="text-xs text-slate-500">–</span>;
-  if (values.length === 1) {
-    return (
-      <svg width={80} height={24}>
-        <circle cx={40} cy={12} r={3} fill={SPARKLINE_STROKE[color]} />
-      </svg>
-    );
-  }
-
-  const w = 80;
-  const h = 24;
-  const pad = 3;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const stepX = (w - pad * 2) / (values.length - 1);
-  const points = values
-    .map((v, i) => {
-      const x = pad + i * stepX;
-      const y = h - pad - ((v - min) / range) * (h - pad * 2);
-      return `${x},${y}`;
-    })
-    .join(" ");
-  const lastX = pad + (values.length - 1) * stepX;
-  const lastY = h - pad - ((values[values.length - 1] - min) / range) * (h - pad * 2);
-
-  return (
-    <svg width={w} height={h}>
-      <polyline points={points} fill="none" stroke={SPARKLINE_STROKE[color]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lastX} cy={lastY} r={2.5} fill={SPARKLINE_STROKE[color]} />
-    </svg>
-  );
-}

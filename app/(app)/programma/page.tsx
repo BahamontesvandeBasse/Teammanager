@@ -468,7 +468,7 @@ export default function ProgrammaPage() {
             </td>
           )}
           <td className={tdCls}>{afwezigCell}</td>
-          <td className={`${tdCls} max-w-[10rem] truncate text-xs text-slate-500`} title={match.notes ?? match.competition ?? ""}>
+          <td className={`${tdCls} max-w-xs whitespace-normal break-words text-xs text-slate-500`}>
             {match.notes ?? match.competition ?? "–"}
           </td>
           <td className={tdCls}>
@@ -521,14 +521,19 @@ export default function ProgrammaPage() {
         )}
         <td className={tdCls}>{afwezigCell}</td>
         <td className={tdCls}>
-          <input
-            type="text"
-            disabled={!canEdit}
-            className={`${inputCls} w-full max-w-[10rem] text-xs`}
-            placeholder="Opmerking"
-            defaultValue={item.notes ?? ""}
-            onBlur={(e) => e.target.value !== (item.notes ?? "") && updateField(item, "notes", e.target.value)}
-          />
+          {canEdit ? (
+            <input
+              type="text"
+              className={`${inputCls} w-full max-w-xs text-xs`}
+              placeholder="Opmerking"
+              defaultValue={item.notes ?? ""}
+              onBlur={(e) => e.target.value !== (item.notes ?? "") && updateField(item, "notes", e.target.value)}
+            />
+          ) : (
+            <span className="block max-w-xs whitespace-normal break-words text-xs text-slate-600">
+              {item.notes || "–"}
+            </span>
+          )}
         </td>
         <td className={tdCls}>
           {canEdit && (

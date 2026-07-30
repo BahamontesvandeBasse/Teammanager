@@ -6,21 +6,24 @@ import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { isAdmin, Role } from "@/lib/auth/roles";
 
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: string; hideForSpeler?: boolean };
 
 // Bovenaan staat alles wat spelers moeten zien (Spelers, Programma,
 // Resultaten, Spelhervattingen); daarna de staf-georiënteerde pagina's.
 // Geen samengevoegde/inklapbare groepen meer — één platte lijst.
+// Wedstrijdvoorbereiding en Belasting zijn voor spelers verborgen: die zien
+// opstelling/coachopmerkingen al via Resultaten (na de wedstrijd) en hun eigen
+// belasting via hun spelersprofiel — de rest is niet voor hen bedoeld.
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: "🏠" },
   { href: "/spelers", label: "Spelers", icon: "👥" },
   { href: "/programma", label: "Programma", icon: "📅" },
   { href: "/resultaten", label: "Resultaten", icon: "⚽" },
   { href: "/spelhervattingen", label: "Spelhervattingen", icon: "🚩" },
-  { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋" },
+  { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋", hideForSpeler: true },
   { href: "/schema", label: "Was & rijden", icon: "🚗" },
   { href: "/training", label: "Trainingsprogramma", icon: "🎯" },
-  { href: "/belasting", label: "Belasting", icon: "❤️" },
+  { href: "/belasting", label: "Belasting", icon: "❤️", hideForSpeler: true },
 ];
 
 function isActiveHref(pathname: string, href: string): boolean {
@@ -31,9 +34,8 @@ export default function Nav({ role, loginActive }: { role: Role; loginActive: bo
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const nav = isAdmin(role)
-    ? [...NAV, { href: "/admin/gebruikers", label: "Gebruikers", icon: "🔑" }]
-    : NAV;
+  const visible = role === "speler" ? NAV.filter((item) => !item.hideForSpeler) : NAV;
+  const nav = isAdmin(role) ? [...visible, { href: "/admin/gebruikers", label: "Gebruikers", icon: "🔑" }] : visible;
 
   function renderItem(item: NavItem) {
     const active = isActiveHref(pathname, item.href);

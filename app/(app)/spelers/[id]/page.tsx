@@ -3,10 +3,10 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { ageFromBirthdate, formatDate, todayIso } from "@/lib/format";
+import { ageFromBirthdate, formatDate, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { isTrainingActivity } from "@/lib/training";
-import { Badge, Button, Card, Message, PageTitle, inputCls, thCls, tdCls } from "@/components/ui";
+import { Badge, Button, Card, Message, PageTitle, Sparkline, SparklineColor, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
 import { DrawingThumbnail, TacticsBoardEditor } from "@/components/TacticsBoard";
 import {
@@ -226,6 +226,25 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
   const recentLoad = load.slice(0, 10);
   const injuryFlags = recentLoad.filter((l) => l.injury_flag);
+
+  // Kleine visuele weergave (sparkline) van de belasting-trend — altijd zichtbaar
+  // op het profiel, ook voor rollen die de volledige Belasting-pagina niet mogen
+  // openen. Zelfde opbouw (belasting = minuten x RPE, per week) als het teamoverzicht
+  // op de Belasting-pagina, maar dan voor deze ene speler.
+  const loadByWeek = new Map<string, number>();
+  for (const l of load) {
+    if (l.absent) continue;
+    const w = isoWeek(l.date);
+    loadByWeek.set(w, (loadByWeek.get(w) ?? 0) + (l.minutes ?? 0) * (l.rpe ?? 0));
+  }
+  const loadTrend = [...loadByWeek.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-6)
+    .map(([, v]) => v);
+  const latestLoad = recentLoad.find((l) => !l.absent);
+  const lowRecovery = !!latestLoad && ((latestLoad.fatigue ?? 0) >= 7 || (latestLoad.soreness ?? 0) >= 7);
+  const loadColor: SparklineColor =
+    injuryFlags.length > 0 || lowRecovery ? "red" : loadTrend.length > 0 ? "green" : "slate";
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
 
   const today = todayIso();
@@ -376,35 +395,6 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         </div>
       </Card>
 
-      {canEdit && (
-        <Card>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">AI-samenvatting</h2>
-            <Button onClick={generateSummary} disabled={generating || !hasData}>
-              {generating ? "Bezig…" : player.ai_summary ? "Opnieuw genereren" : "Genereer samenvatting"}
-            </Button>
-          </div>
-          {!hasData && (
-            <p className="text-sm text-slate-500">
-              Nog geen statistieken, belastingdata of video-observaties voor deze speler.
-            </p>
-          )}
-          {player.ai_summary ? (
-            <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
-              {player.ai_summary}
-              {player.ai_summary_generated_at && (
-                <p className="mt-3 text-xs text-slate-500">
-                  Gegenereerd op {new Date(player.ai_summary_generated_at).toLocaleString("nl-NL")}
-                </p>
-              )}
-            </div>
-          ) : (
-            hasData && <p className="text-sm text-slate-500">Nog geen samenvatting gegenereerd.</p>
-          )}
-          <Message text={msg} error={err} />
-        </Card>
-      )}
-
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <h2 className="mb-3 font-semibold">Statistieken</h2>
@@ -454,7 +444,10 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
         </Card>
 
         <Card>
-          <h2 className="mb-3 font-semibold">Belasting (laatste {recentLoad.length})</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="font-semibold">Belasting (laatste {recentLoad.length})</h2>
+            {loadTrend.length > 0 && <Sparkline values={loadTrend} color={loadColor} />}
+          </div>
           <div className="mb-3 rounded-lg bg-slate-50 p-3 text-sm">
             <span className="font-semibold">{attendedTrainings}</span> / <span className="font-semibold">{totalTrainings}</span> trainingen aanwezig
             {attendancePct !== null && <span className="text-slate-500"> ({attendancePct}%)</span>}
@@ -524,6 +517,35 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
           </div>
         )}
       </Card>
+
+      {canEdit && (
+        <Card className="mt-6">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">AI-samenvatting</h2>
+            <Button onClick={generateSummary} disabled={generating || !hasData}>
+              {generating ? "Bezig…" : player.ai_summary ? "Opnieuw genereren" : "Genereer samenvatting"}
+            </Button>
+          </div>
+          {!hasData && (
+            <p className="text-sm text-slate-500">
+              Nog geen statistieken, belastingdata of video-observaties voor deze speler.
+            </p>
+          )}
+          {player.ai_summary ? (
+            <div className="whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
+              {player.ai_summary}
+              {player.ai_summary_generated_at && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Gegenereerd op {new Date(player.ai_summary_generated_at).toLocaleString("nl-NL")}
+                </p>
+              )}
+            </div>
+          ) : (
+            hasData && <p className="text-sm text-slate-500">Nog geen samenvatting gegenereerd.</p>
+          )}
+          <Message text={msg} error={err} />
+        </Card>
+      )}
 
     </div>
   );
