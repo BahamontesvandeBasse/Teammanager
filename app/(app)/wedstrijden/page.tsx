@@ -41,11 +41,27 @@ function drawingLabel(key: string): string {
   return `Linie-niveau — ${line ? line.charAt(0).toUpperCase() + line.slice(1) : line}`;
 }
 
-const TEAM_MOMENTS: { key: TacticalMoment; label: string }[] = [
-  { key: "attacking", label: "Aanvallen" },
-  { key: "defending", label: "Verdedigen" },
-  { key: "transition_to_attack", label: "Omschakelen naar aanval" },
-  { key: "transition_to_defense", label: "Omschakelen naar verdedigen" },
+// Team-tactiek is gegroepeerd in twee tekeningen die precies bij elkaar horen op het
+// printvel: wat we doen in balbezit (aanvallen + wat als we 'm kwijtraken) en wat we
+// doen zonder bal (verdedigen + wat als we 'm terugpakken). Elke groep heeft z'n eigen
+// tekening (drawings["team:attack"] / drawings["team:defend"]).
+const TEAM_MOMENT_GROUPS: { key: "attack" | "defend"; title: string; moments: { key: TacticalMoment; label: string }[] }[] = [
+  {
+    key: "attack",
+    title: "In balbezit",
+    moments: [
+      { key: "attacking", label: "Aanvallen" },
+      { key: "transition_to_defense", label: "Omschakelen naar verdedigen" },
+    ],
+  },
+  {
+    key: "defend",
+    title: "Niet in balbezit",
+    moments: [
+      { key: "defending", label: "Verdedigen" },
+      { key: "transition_to_attack", label: "Omschakelen naar aanval" },
+    ],
+  },
 ];
 
 // Geen omschakelmomenten op linie-niveau — dat is een team-breed principe,
@@ -312,8 +328,20 @@ function WedstrijdenPageInner() {
     setSubstitutes((prev) => (prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]));
   }
 
+  // Max 4 standaardsituaties per wedstrijd — zo blijven de tekeningen op het printvel
+  // groot en leesbaar in plaats van steeds kleiner naarmate er meer gekozen worden.
+  const MAX_SET_PIECES = 4;
+
   function toggleSetPiece(id: string) {
-    setSelectedSetPieceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelectedSetPieceIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_SET_PIECES) {
+        setMsg(`Je kunt maximaal ${MAX_SET_PIECES} standaardsituaties kiezen — haal er eerst een weg.`);
+        setErr(true);
+        return prev;
+      }
+      return [...prev, id];
+    });
   }
 
   async function save() {
@@ -807,20 +835,29 @@ function WedstrijdenPageInner() {
             <h2 className="mb-3 font-semibold">Tactische aandachtspunten</h2>
 
             <h3 className="mb-1.5 text-sm font-semibold text-slate-700">Team-niveau</h3>
-            <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {TEAM_MOMENTS.map((moment) => (
-                <label key={moment.key} className="text-sm">
-                  <span className="mb-1 block text-slate-500">{moment.label}</span>
-                  <textarea
-                    className={`${inputCls} w-full`}
-                    rows={2}
-                    value={tactics.team[moment.key]}
-                    onChange={(e) => updateTeamTactic(moment.key, e.target.value)}
-                  />
-                </label>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              {TEAM_MOMENT_GROUPS.map((group) => (
+                <div key={group.key} className="rounded-lg border border-slate-200 p-3">
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {group.title}
+                  </span>
+                  <div className="grid gap-2">
+                    {group.moments.map((moment) => (
+                      <label key={moment.key} className="text-sm">
+                        <span className="mb-1 block text-slate-500">{moment.label}</span>
+                        <textarea
+                          className={`${inputCls} w-full`}
+                          rows={2}
+                          value={tactics.team[moment.key]}
+                          onChange={(e) => updateTeamTactic(moment.key, e.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  {renderDrawingSlot(`team:${group.key}`)}
+                </div>
               ))}
             </div>
-            {renderDrawingSlot("team")}
 
             <h3 className="mb-1.5 mt-4 text-sm font-semibold text-slate-700">Linie-niveau</h3>
             <div className="mb-2 flex flex-wrap gap-2">
@@ -862,7 +899,12 @@ function WedstrijdenPageInner() {
 
           <Card className="mb-6">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="font-semibold">Standaardsituaties</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">Standaardsituaties</h2>
+                <Badge color={selectedSetPieceIds.length >= MAX_SET_PIECES ? "amber" : "slate"}>
+                  {selectedSetPieceIds.length}/{MAX_SET_PIECES} gekozen
+                </Badge>
+              </div>
               <Link href="/spelhervattingen" className="text-xs text-rose-600 hover:underline">
                 Beheer spelhervattingen →
               </Link>
@@ -888,20 +930,26 @@ function WedstrijdenPageInner() {
                             <div key={side}>
                               <span className="mb-1 block text-xs text-slate-500">{SET_PIECE_SIDE_LABELS[side]}</span>
                               <div className="flex flex-wrap gap-1.5">
-                                {items.map((sp) => (
-                                  <button
-                                    key={sp.id}
-                                    onClick={() => toggleSetPiece(sp.id)}
-                                    title={sp.description || undefined}
-                                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
-                                      selectedSetPieceIds.includes(sp.id)
-                                        ? "border-rose-600 bg-rose-600 text-white"
-                                        : "border-slate-300 bg-white text-slate-600 hover:border-rose-300"
-                                    }`}
-                                  >
-                                    {sp.title}
-                                  </button>
-                                ))}
+                                {items.map((sp) => {
+                                  const selected = selectedSetPieceIds.includes(sp.id);
+                                  const atCap = !selected && selectedSetPieceIds.length >= MAX_SET_PIECES;
+                                  return (
+                                    <button
+                                      key={sp.id}
+                                      onClick={() => toggleSetPiece(sp.id)}
+                                      title={sp.description || undefined}
+                                      className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                                        selected
+                                          ? "border-rose-600 bg-rose-600 text-white"
+                                          : atCap
+                                            ? "border-slate-200 bg-white text-slate-400"
+                                            : "border-slate-300 bg-white text-slate-600 hover:border-rose-300"
+                                      }`}
+                                    >
+                                      {sp.title}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           );
@@ -1077,8 +1125,7 @@ function WedstrijdenPageInner() {
                           <th className={thCls}>Minuten</th>
                           <th className={thCls}>RPE</th>
                           <th className={thCls}>Belasting</th>
-                          <th className={thCls}>Vermoeidheid</th>
-                          <th className={thCls}>Spierpijn</th>
+                          <th className={thCls}>Herstel</th>
                           <th className={thCls}>Blessure</th>
                         </tr>
                       </thead>
@@ -1087,7 +1134,7 @@ function WedstrijdenPageInner() {
                           <tr key={e.id} className={`border-b border-slate-100 ${e.absent ? "opacity-60" : ""}`}>
                             <td className={`${tdCls} font-medium`}>{players.find((p) => p.id === e.player_id)?.name ?? "—"}</td>
                             {e.absent ? (
-                              <td className={tdCls} colSpan={5}>
+                              <td className={tdCls} colSpan={4}>
                                 <Badge color="slate">🚫 Afwezig</Badge>
                               </td>
                             ) : (
@@ -1095,8 +1142,9 @@ function WedstrijdenPageInner() {
                                 <td className={tdCls}>{e.minutes}</td>
                                 <td className={tdCls}>{e.rpe}</td>
                                 <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
-                                <td className={tdCls}>{e.fatigue ? `${e.fatigue}/10` : "—"}</td>
-                                <td className={tdCls}>{e.soreness ? `${e.soreness}/10` : "—"}</td>
+                                <td className={tdCls}>
+                                  😴 {e.fatigue ? `${e.fatigue}/10` : "—"} · 💪 {e.soreness ? `${e.soreness}/10` : "—"}
+                                </td>
                                 <td className={tdCls}>{e.injury_flag ? <Badge color="red">⚠️</Badge> : "—"}</td>
                               </>
                             )}

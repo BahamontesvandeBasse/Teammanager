@@ -20,11 +20,29 @@ import {
   TacticalMomentNotes,
 } from "@/lib/types";
 
-const TEAM_MOMENTS: { key: TacticalMoment; label: string; icon: string }[] = [
-  { key: "attacking", label: "Aanvallen", icon: "⚔️" },
-  { key: "defending", label: "Verdedigen", icon: "🛡️" },
-  { key: "transition_to_attack", label: "Omschakelen naar aanval", icon: "⏩" },
-  { key: "transition_to_defense", label: "Omschakelen naar verdedigen", icon: "⏪" },
+// Zelfde groepering als in de wedstrijdvoorbereiding-editor: elke groep hoort bij
+// precies één tekening (drawings["team:attack"] / drawings["team:defend"]).
+const TEAM_MOMENT_GROUPS: {
+  key: "attack" | "defend";
+  title: string;
+  moments: { key: TacticalMoment; label: string; icon: string }[];
+}[] = [
+  {
+    key: "attack",
+    title: "In balbezit",
+    moments: [
+      { key: "attacking", label: "Aanvallen", icon: "⚔️" },
+      { key: "transition_to_defense", label: "Omschakelen naar verdedigen", icon: "⏪" },
+    ],
+  },
+  {
+    key: "defend",
+    title: "Niet in balbezit",
+    moments: [
+      { key: "defending", label: "Verdedigen", icon: "🛡️" },
+      { key: "transition_to_attack", label: "Omschakelen naar aanval", icon: "⏩" },
+    ],
+  },
 ];
 
 // Geen omschakelmomenten op linie-niveau, zie ook de wedstrijdvoorbereiding-editor.
@@ -93,8 +111,12 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     .map((pid) => players.find((p) => p.id === pid)?.name)
     .filter(Boolean) as string[];
 
-  const teamMoments = filledMoments(prep?.tactical_notes?.team, TEAM_MOMENTS);
   const drawings = prep?.drawings ?? {};
+  const teamTactics = TEAM_MOMENT_GROUPS.map((group) => ({
+    group,
+    moments: filledMoments(prep?.tactical_notes?.team, group.moments),
+    drawing: drawings[`team:${group.key}`],
+  }));
   const chosenSetPieces = setPieces.filter((sp) => prep?.set_piece_ids?.includes(sp.id));
   const absentPlayerIds = new Set(
     absences.filter((a) => a.player_id && match.date >= a.from && match.date <= a.until).map((a) => a.player_id as string)
@@ -156,91 +178,108 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
         <p className="text-slate-500">Nog geen voorbereiding ingevuld voor deze wedstrijd.</p>
       ) : (
         <>
-          {/* ---------- Pagina 1: opstelling groot + team-tactiek ---------- */}
-          <div className="break-inside-avoid">
-            {slots.length > 0 && (
-              <div className="mb-5">
-                {prep.formation && (
-                  <p className="mb-2 text-center text-xl font-bold text-slate-800 print:text-2xl">{prep.formation}</p>
-                )}
-                <div
-                  className="print-color-exact relative mx-auto w-full max-w-lg overflow-hidden rounded-xl border-2 border-white/80 print:max-w-[560px]"
-                  style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
-                >
-                  <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
-                  <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50" />
+          {/* ---------- Pagina 1: opstelling links, team-tactiek (2 tekeningen) ernaast ---------- */}
+          <div className="break-inside-avoid grid grid-cols-[220px_1fr] gap-4 print:grid-cols-[260px_1fr] print:gap-6">
+            {/* Links: opstelling — smaller dan voorheen zodat de team-tactiek ernaast past. */}
+            <div>
+              {slots.length > 0 && (
+                <div>
+                  {prep.formation && (
+                    <p className="mb-1.5 text-center text-base font-bold text-slate-800 print:text-lg">{prep.formation}</p>
+                  )}
+                  <div
+                    className="print-color-exact relative mx-auto w-full overflow-hidden rounded-xl border-2 border-white/80"
+                    style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
+                  >
+                    <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
+                    <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50" />
 
-                  {slots.map((slot) => {
-                    const player = resolveSlotPlayer(slotMap[slot.id], guestNames, players);
-                    const pid = slotMap[slot.id];
-                    const isAbsent = !!pid && !pid.startsWith("guest:") && absentPlayerIds.has(pid);
-                    return (
-                      <div
-                        key={slot.id}
-                        style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-                        className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
-                      >
-                        <span
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-base font-bold text-white print:h-16 print:w-16 print:text-2xl ${
-                            isAbsent
-                              ? "border-red-400 bg-red-600"
-                              : player
-                                ? player.isGuest
-                                  ? "border-white bg-purple-700"
-                                  : "border-white bg-slate-900"
-                                : "border-dashed border-white/70"
-                          }`}
+                    {slots.map((slot) => {
+                      const player = resolveSlotPlayer(slotMap[slot.id], guestNames, players);
+                      const pid = slotMap[slot.id];
+                      const isAbsent = !!pid && !pid.startsWith("guest:") && absentPlayerIds.has(pid);
+                      return (
+                        <div
+                          key={slot.id}
+                          style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                          className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
                         >
-                          {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
-                        </span>
-                        <span className="max-w-[90px] truncate rounded bg-black/50 px-1 text-[10px] leading-tight text-white print:max-w-[130px] print:text-sm">
-                          {player?.name.split(" ")[0] ?? ""}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {Object.keys(guestNames).length > 0 && (
-                  <p className="mt-2 text-center text-xs text-purple-700 print:text-sm">
-                    G = gastspeler: {Object.values(guestNames).join(", ")}
-                  </p>
-                )}
-                {absentInLineup.length > 0 && (
-                  <p className="print-color-exact mx-auto mt-3 max-w-lg rounded-lg bg-red-50 px-3 py-2 text-center text-xs font-bold text-red-700 print:mt-2 print:max-w-[560px] print:px-3 print:py-2 print:text-base">
-                    ⚠️ {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
-                  </p>
-                )}
-                {substituteNames.length > 0 && (
-                  <div className="mt-3 text-center print:mt-2">
-                    <span className="text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">Wissels</span>
-                    <p className="text-sm font-medium text-slate-800 print:text-base">{substituteNames.join(" · ")}</p>
+                          <span
+                            className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold text-white print:h-9 print:w-9 print:text-sm ${
+                              isAbsent
+                                ? "border-red-400 bg-red-600"
+                                : player
+                                  ? player.isGuest
+                                    ? "border-white bg-purple-700"
+                                    : "border-white bg-slate-900"
+                                  : "border-dashed border-white/70"
+                            }`}
+                          >
+                            {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
+                          </span>
+                          <span className="max-w-[60px] truncate rounded bg-black/50 px-1 text-[8px] leading-tight text-white print:max-w-[70px] print:text-[10px]">
+                            {player?.name.split(" ")[0] ?? ""}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            )}
-
-            {teamMoments.length > 0 && (
-              <div className="mx-auto max-w-3xl print:max-w-none">
-                <h2 className="mb-1.5 text-center text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">
-                  Team-tactiek
-                </h2>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-4">
-                  {teamMoments.map((m) => (
-                    <div key={m.key} className="rounded-lg border border-slate-200 px-3 py-2 print:border-slate-300">
-                      <div className="text-xs font-semibold text-slate-500 print:text-sm">
-                        {m.icon} {m.label}
-                      </div>
-                      <div className="text-sm font-medium text-slate-900 print:text-base">{prep.tactical_notes!.team[m.key]}</div>
+                  {Object.keys(guestNames).length > 0 && (
+                    <p className="mt-2 text-center text-[10px] text-purple-700 print:text-xs">
+                      G = gastspeler: {Object.values(guestNames).join(", ")}
+                    </p>
+                  )}
+                  {absentInLineup.length > 0 && (
+                    <p className="print-color-exact mx-auto mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-center text-[10px] font-bold text-red-700 print:text-xs">
+                      ⚠️ {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
+                    </p>
+                  )}
+                  {substituteNames.length > 0 && (
+                    <div className="mt-2 text-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 print:text-xs">Wissels</span>
+                      <p className="text-xs font-medium text-slate-800 print:text-sm">{substituteNames.join(" · ")}</p>
                     </div>
-                  ))}
+                  )}
                 </div>
-                {drawings["team"]?.length > 0 && (
-                  <div className="mt-2 flex justify-center">
-                    <DrawingThumbnail strokes={drawings["team"]} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[180px]" />
+              )}
+            </div>
+
+            {/* Rechts: team-tactiek — twee groepen, elk met eigen tekening. */}
+            <div>
+              <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">
+                Team-tactiek
+              </h2>
+              <div className="grid grid-cols-2 gap-3 print:gap-4">
+                {teamTactics.map(({ group, moments, drawing }) => (
+                  <div key={group.key} className="rounded-lg border border-slate-200 p-3 print:border-slate-300 print:p-3">
+                    <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">
+                      {group.title}
+                    </h3>
+                    {moments.length === 0 ? (
+                      <p className="text-xs text-slate-400 print:text-sm">Niet ingevuld.</p>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {moments.map((m) => (
+                          <div key={m.key}>
+                            <div className="text-xs font-semibold text-slate-500 print:text-sm">
+                              {m.icon} {m.label}
+                            </div>
+                            <div className="text-sm font-medium text-slate-900 print:text-base">
+                              {prep.tactical_notes!.team[m.key]}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {drawing && drawing.length > 0 && (
+                      <div className="mt-2 flex justify-center">
+                        <DrawingThumbnail strokes={drawing} className="w-full max-w-[200px] rounded-lg border border-slate-200 print:max-w-[220px]" />
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            )}
+            </div>
           </div>
 
           {/* ---------- Pagina 2: tactiek per linie + standaardsituaties, vaste 2x2-kwadranten ---------- */}
@@ -297,9 +336,9 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                                   </span>
                                   <div className="flex flex-col gap-1.5">
                                     {items.map((sp) => (
-                                      <div key={sp.id} className="flex items-center gap-2">
+                                      <div key={sp.id} className="flex items-center gap-2.5">
                                         {sp.drawing.length > 0 && (
-                                          <DrawingThumbnail strokes={sp.drawing} className="h-11 w-7 shrink-0 rounded border border-slate-200 print:h-12 print:w-8" />
+                                          <DrawingThumbnail strokes={sp.drawing} className="h-16 w-10 shrink-0 rounded border border-slate-200 print:h-24 print:w-16" />
                                         )}
                                         <div className="text-sm font-semibold text-slate-900 print:text-base">{sp.title}</div>
                                       </div>
