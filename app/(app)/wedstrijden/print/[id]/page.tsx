@@ -126,6 +126,13 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     .map(([, pid]) => players.find((p) => p.id === pid)?.name)
     .filter(Boolean) as string[];
 
+  // Algemeen overzicht van wie er niet bij is deze wedstrijd — los van de scherpere
+  // waarschuwing hierboven voor het geval iemand per ongeluk toch in de basis staat.
+  const absentSquadNames = players
+    .filter((p) => absentPlayerIds.has(p.id))
+    .map((p) => p.name)
+    .sort((a, b) => a.localeCompare(b, "nl"));
+
   const isAway = match.home_away === "away";
   // Altijd alle 3 linies tonen (ook leeg) zodat pagina 2 een vast 2x2-kwadrantenraster blijft.
   const lineTactics = LINES.map((line) => ({
@@ -190,16 +197,24 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                     <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">
                       Opstelling
                     </h2>
-                    {(substituteNames.length > 0 || absentInLineup.length > 0) && (
-                      <div className="mb-3 rounded-lg border border-slate-200 p-3 print:border-slate-300 print:p-4">
+                    {(substituteNames.length > 0 || absentInLineup.length > 0 || absentSquadNames.length > 0) && (
+                      <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 print:border-slate-300 print:p-4">
                         {absentInLineup.length > 0 && (
-                          <div className={substituteNames.length > 0 ? "mb-2" : undefined}>
+                          <div>
                             <h3 className="text-xs font-bold uppercase tracking-wide text-red-600 print:text-sm">
                               ⚠️ Afwezig in opstelling
                             </h3>
                             <p className="text-sm font-medium text-red-700 print:text-base">
                               {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
                             </p>
+                          </div>
+                        )}
+                        {absentSquadNames.length > 0 && (
+                          <div>
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-amber-700 print:text-sm">
+                              Afwezig
+                            </h3>
+                            <p className="text-sm font-medium text-slate-800 print:text-base">{absentSquadNames.join(", ")}</p>
                           </div>
                         )}
                         {substituteNames.length > 0 && (
