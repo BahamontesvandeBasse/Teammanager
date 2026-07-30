@@ -38,6 +38,16 @@ export type Match = {
   notes: string | null;
   score_for: number | null; // doelpunten Sv Steenwijkerwold — alleen bij gespeelde wedstrijden
   score_against: number | null;
+  // Optionele teamstatistieken, gebruikt om het AI-wedstrijdadvies te onderbouwen.
+  possession_pct: number | null; // balbezit % Sv Steenwijkerwold
+  shots_for: number | null;
+  shots_against: number | null;
+  shots_on_target_for: number | null;
+  shots_on_target_against: number | null;
+  corners_for: number | null;
+  corners_against: number | null;
+  fouls_for: number | null;
+  fouls_against: number | null;
 };
 
 export type WashDuty = {

@@ -235,6 +235,26 @@ function ResultatenPageInner() {
     .filter((n) => n.video_link_id === selectedVideo)
     .sort((a, b) => a.timestamp_seconds - b.timestamp_seconds);
 
+  // ---------- Teamstatistieken (balbezit, schoten, corners, overtredingen) ----------
+
+  type TeamStatField =
+    | "possession_pct"
+    | "shots_for"
+    | "shots_against"
+    | "shots_on_target_for"
+    | "shots_on_target_against"
+    | "corners_for"
+    | "corners_against"
+    | "fouls_for"
+    | "fouls_against";
+
+  async function updateTeamStat(field: TeamStatField, value: string) {
+    if (!selected) return;
+    const n = value === "" ? null : parseInt(value, 10);
+    await api.update("matches", selected.id, { [field]: isNaN(n as number) ? null : n });
+    await reload();
+  }
+
   async function addVideo() {
     if (!selectedMatch || !newUrl.trim()) return;
     setBusy(true);
@@ -564,6 +584,45 @@ function ResultatenPageInner() {
           </Card>
 
           <Card className="mb-6">
+            <h2 className="mb-3 font-semibold">Teamstatistieken</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Optioneel — helpt het AI-wedstrijdadvies onderbouwen. Voor = Sv Steenwijkerwold, tegen = tegenstander.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {(
+                [
+                  ["possession_pct", "Balbezit (%)", selected.possession_pct],
+                  ["shots_for", "Schoten voor", selected.shots_for],
+                  ["shots_against", "Schoten tegen", selected.shots_against],
+                  ["shots_on_target_for", "Schoten op doel voor", selected.shots_on_target_for],
+                  ["shots_on_target_against", "Schoten op doel tegen", selected.shots_on_target_against],
+                  ["corners_for", "Corners voor", selected.corners_for],
+                  ["corners_against", "Corners tegen", selected.corners_against],
+                  ["fouls_for", "Overtredingen voor", selected.fouls_for],
+                  ["fouls_against", "Overtredingen tegen", selected.fouls_against],
+                ] as [TeamStatField, string, number | null][]
+              ).map(([field, label, value]) => (
+                <div key={field}>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
+                  {canEdit ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={field === "possession_pct" ? 100 : undefined}
+                      className={`${inputCls} w-full`}
+                      defaultValue={value ?? ""}
+                      placeholder="—"
+                      onBlur={(e) => e.target.value !== String(value ?? "") && updateTeamStat(field, e.target.value)}
+                    />
+                  ) : (
+                    <p className="px-3 py-2 text-sm font-medium text-slate-700">{value ?? "—"}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="mb-6">
             <h2 className="mb-3 font-semibold">Video&apos;s bij deze wedstrijd</h2>
 
             {matchVideos.length === 0 ? (
@@ -671,19 +730,18 @@ function ResultatenPageInner() {
               </div>
               )}
 
+              {/* Het AI-advies verwerkt individuele minuten/beoordelingen — daarom
+                  net als elders in de app alleen zichtbaar voor staf. */}
+              {canEdit && (
               <div className="mt-6 border-t border-slate-200 pt-5">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">AI-advies</h3>
-                  {canEdit && (
-                    <Button onClick={generateAdvice} disabled={generating}>
-                      {generating ? "Bezig…" : currentVideo.ai_advice ? "Opnieuw genereren" : "Genereer AI-advies"}
-                    </Button>
-                  )}
+                  <Button onClick={generateAdvice} disabled={generating}>
+                    {generating ? "Bezig…" : currentVideo.ai_advice ? "Opnieuw genereren" : "Genereer AI-advies"}
+                  </Button>
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
-                  {currentNotes.length === 0
-                    ? "Gebaseerd op de thema's uit de wedstrijdvoorbereiding — voeg optioneel observaties toe voor een preciezer advies."
-                    : "Gebaseerd op de thema's uit de wedstrijdvoorbereiding en je observaties."}
+                  Gebaseerd op de thema&apos;s uit de wedstrijdvoorbereiding, je observaties, de spelersstatistieken en (indien ingevuld) de teamstatistieken.
                 </p>
                 {currentVideo.ai_advice ? (
                   <div className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-slate-800">
@@ -698,6 +756,7 @@ function ResultatenPageInner() {
                   <p className="mt-2 text-sm text-slate-500">Nog geen advies gegenereerd.</p>
                 )}
               </div>
+              )}
             </Card>
           )}
         </>

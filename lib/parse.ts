@@ -156,6 +156,15 @@ function matchFromTeams(
     notes: null,
     score_for: null,
     score_against: null,
+    possession_pct: null,
+    shots_for: null,
+    shots_against: null,
+    shots_on_target_for: null,
+    shots_on_target_against: null,
+    corners_for: null,
+    corners_against: null,
+    fouls_for: null,
+    fouls_against: null,
   };
 }
 

@@ -44,7 +44,7 @@ function CollapsibleCard({
   className,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   defaultOpen?: boolean;
   className?: string;
@@ -205,6 +205,15 @@ export default function ProgrammaPage() {
         notes: null,
         score_for: null,
         score_against: null,
+        possession_pct: null,
+        shots_for: null,
+        shots_against: null,
+        shots_on_target_for: null,
+        shots_on_target_against: null,
+        corners_for: null,
+        corners_against: null,
+        fouls_for: null,
+        fouls_against: null,
       });
       if (newHomeAway === "away") {
         const existingClubNames = new Set(clubs.map((c) => c.name.toLowerCase()));
@@ -404,7 +413,7 @@ export default function ProgrammaPage() {
   const hasActiveAbsence = absences.some((a) => today >= a.from && today <= a.until);
   const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(filteredAgendaRows, (r) => r.date, today);
 
-  function agendaRow(row: AgendaRow) {
+  function agendaRow(row: AgendaRow, showResult: boolean) {
     const absentNames = absentNamesForDate(row.date);
     const afwezigCell =
       absentNames.length === 0 ? (
@@ -423,39 +432,41 @@ export default function ProgrammaPage() {
           <td className={tdCls}>
             <Badge color="blue">{activity}</Badge>
           </td>
-          <td className={`${tdCls} text-xs`}>{match.kickoff_time}</td>
-          <td className={tdCls}>
-            {played ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={0}
-                  disabled={!canEdit}
-                  className={`${inputCls} w-12 text-xs`}
-                  defaultValue={match.score_for ?? ""}
-                  placeholder="-"
-                  onBlur={(e) =>
-                    e.target.value !== String(match.score_for ?? "") && updateScore(match, "score_for", e.target.value)
-                  }
-                />
-                <span className="text-slate-500">–</span>
-                <input
-                  type="number"
-                  min={0}
-                  disabled={!canEdit}
-                  className={`${inputCls} w-12 text-xs`}
-                  defaultValue={match.score_against ?? ""}
-                  placeholder="-"
-                  onBlur={(e) =>
-                    e.target.value !== String(match.score_against ?? "") &&
-                    updateScore(match, "score_against", e.target.value)
-                  }
-                />
-              </div>
-            ) : (
-              <Badge>gepland</Badge>
-            )}
-          </td>
+          <td className={`${tdCls} font-medium text-slate-700`}>{match.kickoff_time || "–"}</td>
+          {showResult && (
+            <td className={tdCls}>
+              {played ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!canEdit}
+                    className={`${inputCls} w-12 text-xs`}
+                    defaultValue={match.score_for ?? ""}
+                    placeholder="-"
+                    onBlur={(e) =>
+                      e.target.value !== String(match.score_for ?? "") && updateScore(match, "score_for", e.target.value)
+                    }
+                  />
+                  <span className="text-slate-500">–</span>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={!canEdit}
+                    className={`${inputCls} w-12 text-xs`}
+                    defaultValue={match.score_against ?? ""}
+                    placeholder="-"
+                    onBlur={(e) =>
+                      e.target.value !== String(match.score_against ?? "") &&
+                      updateScore(match, "score_against", e.target.value)
+                    }
+                  />
+                </div>
+              ) : (
+                <Badge>gepland</Badge>
+              )}
+            </td>
+          )}
           <td className={tdCls}>{afwezigCell}</td>
           <td className={`${tdCls} max-w-[10rem] truncate text-xs text-slate-500`} title={match.notes ?? match.competition ?? ""}>
             {match.notes ?? match.competition ?? "–"}
@@ -490,19 +501,24 @@ export default function ProgrammaPage() {
           <Badge color={activityColor(item.activity)}>{activityLabel}</Badge>
         </td>
         <td className={tdCls}>
-          <input
-            type="time"
-            disabled={!canEdit}
-            className={`${inputCls} w-20 text-xs`}
-            defaultValue={item.kickoff_time ?? ""}
-            onBlur={(e) =>
-              e.target.value !== (item.kickoff_time ?? "") && updateField(item, "kickoff_time", e.target.value)
-            }
-          />
+          {canEdit ? (
+            <input
+              type="time"
+              className={`${inputCls} w-20 text-sm`}
+              defaultValue={item.kickoff_time ?? ""}
+              onBlur={(e) =>
+                e.target.value !== (item.kickoff_time ?? "") && updateField(item, "kickoff_time", e.target.value)
+              }
+            />
+          ) : (
+            <span className="font-medium text-slate-700">{item.kickoff_time || "–"}</span>
+          )}
         </td>
-        <td className={tdCls}>
-          <span className="text-xs text-slate-500">–</span>
-        </td>
+        {showResult && (
+          <td className={tdCls}>
+            <span className="text-xs text-slate-500">–</span>
+          </td>
+        )}
         <td className={tdCls}>{afwezigCell}</td>
         <td className={tdCls}>
           <input
@@ -525,7 +541,7 @@ export default function ProgrammaPage() {
     );
   }
 
-  function agendaTable(list: AgendaRow[], emptyText: string) {
+  function agendaTable(list: AgendaRow[], emptyText: string, showResult: boolean) {
     if (list.length === 0) return <p className="text-sm text-slate-500">{emptyText}</p>;
     return (
       <div className="overflow-x-auto">
@@ -535,13 +551,13 @@ export default function ProgrammaPage() {
               <th className={thCls}>Datum</th>
               <th className={thCls}>Activiteit</th>
               <th className={thCls}>Aftrap</th>
-              <th className={thCls}>Uitslag</th>
+              {showResult && <th className={thCls}>Uitslag</th>}
               <th className={thCls}>Afwezig</th>
               <th className={thCls}>Opmerking</th>
               <th className={thCls}></th>
             </tr>
           </thead>
-          <tbody>{list.map(agendaRow)}</tbody>
+          <tbody>{list.map((row) => agendaRow(row, showResult))}</tbody>
         </table>
       </div>
     );
@@ -551,16 +567,132 @@ export default function ProgrammaPage() {
     <div>
       <PageTitle
         title="Programma"
-        subtitle="Wedstrijden, trainingen en toernooien op één plek, gesplitst in aankomend en verleden."
+        subtitle="Wedstrijden, trainingen en toernooien op één plek, gesplitst in aankomend en afgerond."
       />
 
       <Message text={msg} error={err} />
+
+      <CollapsibleCard
+        title="Afwezigheid beheren"
+        subtitle={hasActiveAbsence ? "Er is nu iemand afwezig" : "Niemand momenteel afwezig"}
+        defaultOpen={hasActiveAbsence}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">
+            Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
+            Klik in de tijdlijn op een bestaande balk om &apos;m te bewerken, bijvoorbeeld als iemand eerder terug is.
+          </p>
+          {canEdit && (
+            <button
+              onClick={() => (absFormOpen ? resetAbsenceForm() : setAbsFormOpen(true))}
+              className="shrink-0 text-xs font-medium text-emerald-600 hover:underline"
+            >
+              {absFormOpen ? "Sluiten" : "+ Toevoegen"}
+            </button>
+          )}
+        </div>
+        {canEdit && absFormOpen && (
+          <div className="mb-2 mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)} disabled={!!editingAbsenceId}>
+              <option value="">— Kies speler/staflid —</option>
+              <optgroup label="Spelers">
+                {players.map((p) => (
+                  <option key={p.id} value={`player:${p.id}`}>{p.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Staf">
+                {staff.map((s) => (
+                  <option key={s.id} value={`staff:${s.id}`}>{s.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <input type="date" className={inputCls} value={absFrom} onChange={(e) => setAbsFrom(e.target.value)} />
+            <input type="date" className={inputCls} value={absUntil} onChange={(e) => setAbsUntil(e.target.value)} />
+            <input
+              type="text"
+              className={inputCls}
+              placeholder="Reden (optioneel)"
+              value={absReason}
+              onChange={(e) => setAbsReason(e.target.value)}
+            />
+            <div className="flex items-center gap-3">
+              <Button onClick={saveAbsence}>{editingAbsenceId ? "Bijwerken" : "Toevoegen"}</Button>
+              {editingAbsenceId && (
+                <button className="text-xs text-slate-500 hover:underline" onClick={resetAbsenceForm}>
+                  annuleren
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5">
+          <AbsenceTimeline
+            players={players}
+            staff={staff}
+            absences={absences}
+            onRemove={canEdit ? removeAbsence : undefined}
+            onEdit={canEdit ? startEditAbsence : undefined}
+          />
+        </div>
+      </CollapsibleCard>
+
+      <div className="mb-4 mt-6 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          className={`${inputCls} max-w-xs`}
+          placeholder="Zoeken op tegenstander of activiteit…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex gap-1">
+          {([
+            ["alle", "Alles"],
+            ["wedstrijd", "Wedstrijden"],
+            ["training", "Trainingen"],
+          ] as [TypeFilter, string][]).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setTypeFilter(value)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                typeFilter === value ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <CollapsibleCard
+        title={
+          <>
+            Aankomend <span className="text-sm font-normal text-slate-500">({upcomingAgenda.length})</span>
+          </>
+        }
+        defaultOpen
+        className="mb-6"
+      >
+        {agendaTable(upcomingAgenda, "Niets aankomend gepland.", false)}
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title={
+          <>
+            Afgerond <span className="text-sm font-normal text-slate-500">({pastAgenda.length})</span>
+          </>
+        }
+        className="mb-6"
+      >
+        {agendaTable(pastAgenda, "Nog niets geweest.", true)}
+      </CollapsibleCard>
 
       {canEdit && (
         <>
           <CollapsibleCard
             title="Activiteit toevoegen of wedstrijden importeren"
             subtitle="Plakken vanaf voetbal.nl, Excel/CSV-upload, of handmatig een wedstrijd/training/toernooi"
+            className="mt-6"
           >
             <div className="grid gap-6 lg:grid-cols-2">
               <div>
@@ -798,113 +930,6 @@ export default function ProgrammaPage() {
           )}
         </>
       )}
-
-      <CollapsibleCard
-        title="Afwezigheid beheren"
-        subtitle={hasActiveAbsence ? "Er is nu iemand afwezig" : "Niemand momenteel afwezig"}
-        defaultOpen={hasActiveAbsence}
-        className="mt-6"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">
-            Een periode hier toevoegen zet de persoon automatisch als afwezig bij elke training/wedstrijd in die periode — geen losse regels meer nodig.
-            Klik in de tijdlijn op een bestaande balk om 'm te bewerken, bijvoorbeeld als iemand eerder terug is.
-          </p>
-          {canEdit && (
-            <button
-              onClick={() => (absFormOpen ? resetAbsenceForm() : setAbsFormOpen(true))}
-              className="shrink-0 text-xs font-medium text-emerald-600 hover:underline"
-            >
-              {absFormOpen ? "Sluiten" : "+ Toevoegen"}
-            </button>
-          )}
-        </div>
-        {canEdit && absFormOpen && (
-          <div className="mb-2 mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <select className={inputCls} value={absPerson} onChange={(e) => setAbsPerson(e.target.value)} disabled={!!editingAbsenceId}>
-              <option value="">— Kies speler/staflid —</option>
-              <optgroup label="Spelers">
-                {players.map((p) => (
-                  <option key={p.id} value={`player:${p.id}`}>{p.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Staf">
-                {staff.map((s) => (
-                  <option key={s.id} value={`staff:${s.id}`}>{s.name}</option>
-                ))}
-              </optgroup>
-            </select>
-            <input type="date" className={inputCls} value={absFrom} onChange={(e) => setAbsFrom(e.target.value)} />
-            <input type="date" className={inputCls} value={absUntil} onChange={(e) => setAbsUntil(e.target.value)} />
-            <input
-              type="text"
-              className={inputCls}
-              placeholder="Reden (optioneel)"
-              value={absReason}
-              onChange={(e) => setAbsReason(e.target.value)}
-            />
-            <div className="flex items-center gap-3">
-              <Button onClick={saveAbsence}>{editingAbsenceId ? "Bijwerken" : "Toevoegen"}</Button>
-              {editingAbsenceId && (
-                <button className="text-xs text-slate-500 hover:underline" onClick={resetAbsenceForm}>
-                  annuleren
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-5">
-          <AbsenceTimeline
-            players={players}
-            staff={staff}
-            absences={absences}
-            onRemove={canEdit ? removeAbsence : undefined}
-            onEdit={canEdit ? startEditAbsence : undefined}
-          />
-        </div>
-      </CollapsibleCard>
-
-      <div className="mb-4 mt-6 flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          className={`${inputCls} max-w-xs`}
-          placeholder="Zoeken op tegenstander of activiteit…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <div className="flex gap-1">
-          {([
-            ["alle", "Alles"],
-            ["wedstrijd", "Wedstrijden"],
-            ["training", "Trainingen"],
-          ] as [TypeFilter, string][]).map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setTypeFilter(value)}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                typeFilter === value ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Card className="mb-6">
-        <h2 className="mb-3 font-semibold">
-          Aankomend <span className="text-sm font-normal text-slate-500">({upcomingAgenda.length})</span>
-        </h2>
-        {agendaTable(upcomingAgenda, "Niets aankomend gepland.")}
-      </Card>
-
-      <Card className="mb-6">
-        <h2 className="mb-3 font-semibold">
-          Verleden <span className="text-sm font-normal text-slate-500">({pastAgenda.length})</span>
-        </h2>
-        {agendaTable(pastAgenda, "Nog niets geweest.")}
-      </Card>
     </div>
   );
 }

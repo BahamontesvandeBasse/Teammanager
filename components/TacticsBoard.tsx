@@ -188,13 +188,44 @@ function drawPlayer(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, {
 }
 
 function drawBall(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "ball" }>, selected?: boolean) {
+  const r = BALL_R;
+
+  // Lichte bolling i.p.v. platte witte stip.
+  const grad = ctx.createRadialGradient(el.x - r * 0.3, el.y - r * 0.35, r * 0.15, el.x, el.y, r);
+  grad.addColorStop(0, "#ffffff");
+  grad.addColorStop(1, "#d6dbe1");
   ctx.beginPath();
-  ctx.arc(el.x, el.y, BALL_R, 0, Math.PI * 2);
-  ctx.fillStyle = "white";
+  ctx.arc(el.x, el.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
   ctx.fill();
-  ctx.lineWidth = selected ? 3 : 1.5;
-  ctx.strokeStyle = selected ? "#eab308" : "#111827";
+  ctx.lineWidth = selected ? 2.5 : 1.25;
+  ctx.strokeStyle = selected ? "#eab308" : "#1f2937";
   ctx.stroke();
+
+  // Klassiek pentagoonpatroon: middenpentagoon + zoompjes naar de rand.
+  ctx.fillStyle = "#1f2937";
+  ctx.strokeStyle = "#1f2937";
+  const pentR = r * 0.42;
+  const sides = 5;
+  const angles = Array.from({ length: sides }, (_, i) => -Math.PI / 2 + i * ((2 * Math.PI) / sides));
+
+  ctx.beginPath();
+  angles.forEach((a, i) => {
+    const px = el.x + pentR * Math.cos(a);
+    const py = el.y + pentR * Math.sin(a);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.lineWidth = 1;
+  angles.forEach((a) => {
+    ctx.beginPath();
+    ctx.moveTo(el.x + pentR * Math.cos(a), el.y + pentR * Math.sin(a));
+    ctx.lineTo(el.x + r * 0.92 * Math.cos(a), el.y + r * 0.92 * Math.sin(a));
+    ctx.stroke();
+  });
 }
 
 function drawElement(ctx: CanvasRenderingContext2D, el: DrawingElement, selected?: boolean) {
@@ -361,6 +392,14 @@ export function TacticsBoardEditor({
     setSelectedIndex(null);
   }
 
+  // Eerste cijfer na het selecteren overschrijft het rugnummer, een volgend cijfer
+  // vult aan (tot 2 tekens) — zo kun je meteen na het plaatsen/aanklikken van een
+  // speler het rugnummer intypen zonder eerst het tekstveldje te hoeven aanklikken.
+  const justSelectedRef = useRef(true);
+  useEffect(() => {
+    justSelectedRef.current = true;
+  }, [selectedIndex]);
+
   // Delete/Backspace verwijdert het geselecteerde symbool — niet alleen via de
   // knop hieronder. Genegeerd terwijl er in een tekstveld getypt wordt (bv.
   // het rugnummer-veld), zodat normaal bewerken niet per ongeluk een symbool wist.
@@ -373,6 +412,15 @@ export function TacticsBoardEditor({
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         removeSelected();
+        return;
+      }
+      if (/^[0-9]$/.test(e.key) && selectedIndex !== null) {
+        const el = elements[selectedIndex];
+        if (!el || el.kind !== "player") return;
+        e.preventDefault();
+        const current = justSelectedRef.current ? "" : (el.number ?? "");
+        justSelectedRef.current = false;
+        updateSelectedNumber((current + e.key).slice(0, 2));
       }
     }
     window.addEventListener("keydown", handleKeyDown);

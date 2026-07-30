@@ -149,8 +149,8 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
       {!prep ? (
         <p className="text-slate-500">Nog geen voorbereiding ingevuld voor deze wedstrijd.</p>
       ) : (
-        <div className="print:grid print:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] print:gap-6 print:items-start">
-          {/* Linkerkolom: de opstelling, groot en centraal. */}
+        <div className="print:grid print:grid-cols-[minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,0.85fr)] print:gap-5 print:items-start">
+          {/* Kolom 1: de opstelling, groot en centraal. */}
           <div>
             {slots.length > 0 && (
               <div className="mb-6 break-inside-avoid print:mb-0">
@@ -214,14 +214,14 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
             )}
           </div>
 
-          {/* Rechterkolom: tactiek als korte, grote regels + standaardsituaties compact. */}
+          {/* Kolom 2: team-tactiek + tactiek per linie. */}
           <div>
             {teamMoments.length > 0 && (
-              <div className="mb-4 break-inside-avoid print:mb-4">
-                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Team-tactiek</h2>
-                <div className="grid gap-2 sm:grid-cols-2 print:grid-cols-2 print:gap-2">
+              <div className="mb-3 break-inside-avoid print:mb-3">
+                <h2 className="mb-1.5 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Team-tactiek</h2>
+                <div className="grid gap-1.5 sm:grid-cols-2 print:grid-cols-2 print:gap-1.5">
                   {teamMoments.map((m) => (
-                    <div key={m.key} className="rounded-lg border border-slate-200 px-3 py-2 print:border-slate-300">
+                    <div key={m.key} className="rounded-lg border border-slate-200 px-2.5 py-1.5 print:border-slate-300">
                       <div className="text-xs font-semibold text-slate-500 print:text-sm">
                         {m.icon} {m.label}
                       </div>
@@ -230,19 +230,19 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                   ))}
                 </div>
                 {drawings["team"]?.length > 0 && (
-                  <div className="mt-2 print:mt-2">
-                    <DrawingThumbnail strokes={drawings["team"]} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[190px]" />
+                  <div className="mt-2 print:mt-1.5">
+                    <DrawingThumbnail strokes={drawings["team"]} className="w-full max-w-[220px] rounded-lg border border-slate-200 print:max-w-[160px]" />
                   </div>
                 )}
               </div>
             )}
 
             {lineTactics.length > 0 && (
-              <div className="mb-4 break-inside-avoid print:mb-4">
-                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Tactiek per linie</h2>
-                <div className="flex flex-col gap-2">
+              <div className="break-inside-avoid">
+                <h2 className="mb-1.5 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Tactiek per linie</h2>
+                <div className="flex flex-col gap-1.5">
                   {lineTactics.map(({ line, moments, drawing }) => (
-                    <div key={line.key} className="rounded-lg border border-slate-200 px-3 py-2 print:border-slate-300">
+                    <div key={line.key} className="rounded-lg border border-slate-200 px-2.5 py-1.5 print:border-slate-300">
                       <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">{line.label}</div>
                       <div className="grid gap-1.5 sm:grid-cols-2 print:grid-cols-2">
                         {moments.map((m) => (
@@ -256,7 +256,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                       </div>
                       {drawing && drawing.length > 0 && (
                         <div className="mt-1.5">
-                          <DrawingThumbnail strokes={drawing} className="w-full max-w-[180px] rounded-lg border border-slate-200 print:max-w-[150px]" />
+                          <DrawingThumbnail strokes={drawing} className="w-full max-w-[160px] rounded-lg border border-slate-200 print:max-w-[130px]" />
                         </div>
                       )}
                     </div>
@@ -264,18 +264,21 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                 </div>
               </div>
             )}
+          </div>
 
+          {/* Kolom 3: standaardsituaties. */}
+          <div>
             {chosenSetPieces.length > 0 && (
               <div className="break-inside-avoid">
-                <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Standaardsituaties</h2>
-                <div className="flex flex-col gap-3">
+                <h2 className="mb-1.5 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">Standaardsituaties</h2>
+                <div className="flex flex-col gap-2.5">
                   {SET_PIECE_CATEGORIES.map((cat) => {
                     const inCategory = chosenSetPieces.filter((sp) => sp.category === cat);
                     if (inCategory.length === 0) return null;
                     return (
                       <div key={cat}>
                         <h3 className="mb-1 text-xs font-bold text-slate-600 print:text-sm">{SET_PIECE_CATEGORY_LABELS[cat]}</h3>
-                        <div className="grid gap-2 sm:grid-cols-2 print:grid-cols-2">
+                        <div className="flex flex-col gap-2">
                           {SET_PIECE_SIDES.map((side) => {
                             const items = inCategory.filter((sp) => sp.side === side);
                             if (items.length === 0) return null;
@@ -288,7 +291,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                                   {items.map((sp) => (
                                     <div key={sp.id} className="flex items-center gap-2">
                                       {sp.drawing.length > 0 && (
-                                        <DrawingThumbnail strokes={sp.drawing} className="h-12 w-8 shrink-0 rounded border border-slate-200 print:h-14 print:w-9" />
+                                        <DrawingThumbnail strokes={sp.drawing} className="h-11 w-7 shrink-0 rounded border border-slate-200 print:h-12 print:w-8" />
                                       )}
                                       <div className="text-sm font-semibold text-slate-900 print:text-base">{sp.title}</div>
                                     </div>

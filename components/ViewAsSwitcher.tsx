@@ -32,7 +32,7 @@ export function ViewAsSwitcher({ realRole, effectiveRole }: { realRole: Role; ef
 
   if (effectiveRole !== "admin") {
     return (
-      <div className="sticky top-0 z-30 flex flex-wrap items-center justify-center gap-3 bg-amber-400 px-4 py-2 text-center text-sm font-medium text-amber-950">
+      <div className="no-print sticky top-0 z-30 flex flex-wrap items-center justify-center gap-3 bg-amber-400 px-4 py-2 text-center text-sm font-medium text-amber-950">
         <span>
           👁️ Je bekijkt de app als <strong>{ROLE_LABELS[effectiveRole]}</strong> — zo zien zij het.
         </span>
@@ -48,7 +48,7 @@ export function ViewAsSwitcher({ realRole, effectiveRole }: { realRole: Role; ef
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 bg-neutral-100 px-4 py-1.5 text-xs text-neutral-500">
+    <div className="no-print flex flex-wrap items-center justify-center gap-2 bg-neutral-100 px-4 py-1.5 text-xs text-neutral-500">
       <span>Bekijk als:</span>
       {IMPERSONATABLE.map((r) => (
         <button

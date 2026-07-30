@@ -184,49 +184,6 @@ export default function SpelersPage() {
         subtitle="Importeer de spelerslijst uit Sportlink (Excel) of voeg spelers handmatig toe."
       />
 
-      {canEdit && (
-      <Card className="mb-6">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="font-semibold">Speler toevoegen</h2>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="text-xs font-medium text-slate-500 hover:text-rose-600 hover:underline"
-            title="Handig bij de start van het seizoen — importeer de hele lijst in één keer"
-          >
-            of importeer via Excel/CSV
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFile(f, players.length > 0);
-            }}
-          />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <input
-            className={inputCls}
-            placeholder="Naam"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-          />
-          <input
-            className={`${inputCls} w-28`}
-            placeholder="Rugnummer"
-            value={newNumber}
-            onChange={(e) => setNewNumber(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-          />
-          <Button onClick={addPlayer}>Toevoegen</Button>
-        </div>
-        <Message text={msg} error={err} />
-      </Card>
-      )}
-
       <Card>
         <h2 className="mb-3 font-semibold">
           Selectie <span className="text-sm font-normal text-slate-500">({players.filter((p) => p.active).length} actief van {players.length})</span>
@@ -370,6 +327,49 @@ export default function SpelersPage() {
         )}
       </Card>
 
+      {canEdit && (
+      <Card className="mt-6">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="font-semibold">Speler toevoegen</h2>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="text-xs font-medium text-slate-500 hover:text-rose-600 hover:underline"
+            title="Handig bij de start van het seizoen — importeer de hele lijst in één keer"
+          >
+            of importeer via Excel/CSV
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f, players.length > 0);
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <input
+            className={inputCls}
+            placeholder="Naam"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+          />
+          <input
+            className={`${inputCls} w-28`}
+            placeholder="Rugnummer"
+            value={newNumber}
+            onChange={(e) => setNewNumber(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+          />
+          <Button onClick={addPlayer}>Toevoegen</Button>
+        </div>
+        <Message text={msg} error={err} />
+      </Card>
+      )}
+
       <Card className="mt-6">
         <h2 className="mb-1 font-semibold">
           Staf <span className="text-sm font-normal text-slate-500">({staff.length})</span>
@@ -377,29 +377,10 @@ export default function SpelersPage() {
         <p className="mb-3 text-xs text-slate-500">
           Trainers, leiders en begeleiding — staat los van de spelerslijst en telt niet mee in de was- en rijrotatie.
         </p>
-        {canEdit && (
-        <div className="mb-4 flex flex-wrap gap-3">
-          <input
-            className={inputCls}
-            placeholder="Naam"
-            value={newStaffName}
-            onChange={(e) => setNewStaffName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addStaff()}
-          />
-          <input
-            className={`${inputCls} w-64`}
-            placeholder="Taak (bv. Coach, Trainer)"
-            value={newStaffRole}
-            onChange={(e) => setNewStaffRole(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addStaff()}
-          />
-          <Button onClick={addStaff}>Toevoegen</Button>
-        </div>
-        )}
         {staff.length === 0 ? (
           <p className="text-sm text-slate-500">Nog geen stafleden toegevoegd.</p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[...staff].sort((a, b) => a.name.localeCompare(b.name, "nl")).map((s) => (
               <div
                 key={s.id}
@@ -447,6 +428,25 @@ export default function SpelersPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {canEdit && (
+          <div className="flex flex-wrap gap-3">
+            <input
+              className={inputCls}
+              placeholder="Naam"
+              value={newStaffName}
+              onChange={(e) => setNewStaffName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addStaff()}
+            />
+            <input
+              className={`${inputCls} w-64`}
+              placeholder="Taak (bv. Coach, Trainer)"
+              value={newStaffRole}
+              onChange={(e) => setNewStaffRole(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addStaff()}
+            />
+            <Button onClick={addStaff}>Toevoegen</Button>
           </div>
         )}
       </Card>

@@ -88,7 +88,13 @@
     ".next-preview-56364/types/**/*.ts",
     ".next-preview-56364/dev/types/**/*.ts",
     ".next-preview-54754/types/**/*.ts",
-    ".next-preview-54754/dev/types/**/*.ts"
+    ".next-preview-54754/dev/types/**/*.ts",
+    ".next-preview-49676/types/**/*.ts",
+    ".next-preview-49676/dev/types/**/*.ts",
+    ".next-preview-58699/types/**/*.ts",
+    ".next-preview-58699/dev/types/**/*.ts",
+    ".next-preview-58843/types/**/*.ts",
+    ".next-preview-58843/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"
