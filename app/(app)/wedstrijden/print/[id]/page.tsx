@@ -178,106 +178,110 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
         <p className="text-slate-500">Nog geen voorbereiding ingevuld voor deze wedstrijd.</p>
       ) : (
         <>
-          {/* ---------- Pagina 1: opstelling links, team-tactiek (2 tekeningen) ernaast ---------- */}
-          <div className="break-inside-avoid grid grid-cols-[220px_1fr] gap-4 print:grid-cols-[260px_1fr] print:gap-6">
-            {/* Links: opstelling — smaller dan voorheen zodat de team-tactiek ernaast past. */}
-            <div>
-              {slots.length > 0 && (
-                <div>
-                  {prep.formation && (
-                    <p className="mb-1.5 text-center text-base font-bold text-slate-800 print:text-lg">{prep.formation}</p>
-                  )}
-                  <div
-                    className="print-color-exact relative mx-auto w-full overflow-hidden rounded-xl border-2 border-white/80"
-                    style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
-                  >
-                    <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
-                    <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50" />
+          {/* ---------- Pagina 1: opstelling links, team-tactiek (2 tekeningen) ernaast ----------
+              Alles gecentreerd op de pagina (horizontaal en verticaal) i.p.v. edge-to-edge
+              uitgerekt, zodat het A3-vel goed gevuld oogt zonder de indeling te forceren. */}
+          <div className="break-inside-avoid flex justify-center print:min-h-[840px] print:items-center">
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start print:flex-row print:items-center print:gap-10">
+              {/* Links: opstelling */}
+              <div className="shrink-0">
+                {slots.length > 0 && (
+                  <div>
+                    {prep.formation && (
+                      <p className="mb-2 text-center text-lg font-bold text-slate-800 print:text-xl">{prep.formation}</p>
+                    )}
+                    <div
+                      className="print-color-exact relative mx-auto w-[260px] overflow-hidden rounded-xl border-2 border-white/80 print:w-[340px]"
+                      style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
+                    >
+                      <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
+                      <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50" />
 
-                    {slots.map((slot) => {
-                      const player = resolveSlotPlayer(slotMap[slot.id], guestNames, players);
-                      const pid = slotMap[slot.id];
-                      const isAbsent = !!pid && !pid.startsWith("guest:") && absentPlayerIds.has(pid);
-                      return (
-                        <div
-                          key={slot.id}
-                          style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-                          className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
-                        >
-                          <span
-                            className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold text-white print:h-9 print:w-9 print:text-sm ${
-                              isAbsent
-                                ? "border-red-400 bg-red-600"
-                                : player
-                                  ? player.isGuest
-                                    ? "border-white bg-purple-700"
-                                    : "border-white bg-slate-900"
-                                  : "border-dashed border-white/70"
-                            }`}
+                      {slots.map((slot) => {
+                        const player = resolveSlotPlayer(slotMap[slot.id], guestNames, players);
+                        const pid = slotMap[slot.id];
+                        const isAbsent = !!pid && !pid.startsWith("guest:") && absentPlayerIds.has(pid);
+                        return (
+                          <div
+                            key={slot.id}
+                            style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
                           >
-                            {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
-                          </span>
-                          <span className="max-w-[60px] truncate rounded bg-black/50 px-1 text-[8px] leading-tight text-white print:max-w-[70px] print:text-[10px]">
-                            {player?.name.split(" ")[0] ?? ""}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {Object.keys(guestNames).length > 0 && (
-                    <p className="mt-2 text-center text-[10px] text-purple-700 print:text-xs">
-                      G = gastspeler: {Object.values(guestNames).join(", ")}
-                    </p>
-                  )}
-                  {absentInLineup.length > 0 && (
-                    <p className="print-color-exact mx-auto mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-center text-[10px] font-bold text-red-700 print:text-xs">
-                      ⚠️ {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
-                    </p>
-                  )}
-                  {substituteNames.length > 0 && (
-                    <div className="mt-2 text-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 print:text-xs">Wissels</span>
-                      <p className="text-xs font-medium text-slate-800 print:text-sm">{substituteNames.join(" · ")}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Rechts: team-tactiek — twee groepen, elk met eigen tekening. */}
-            <div>
-              <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-rose-700 print:text-base">
-                Team-tactiek
-              </h2>
-              <div className="grid grid-cols-2 gap-3 print:gap-4">
-                {teamTactics.map(({ group, moments, drawing }) => (
-                  <div key={group.key} className="rounded-lg border border-slate-200 p-3 print:border-slate-300 print:p-3">
-                    <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">
-                      {group.title}
-                    </h3>
-                    {moments.length === 0 ? (
-                      <p className="text-xs text-slate-400 print:text-sm">Niet ingevuld.</p>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {moments.map((m) => (
-                          <div key={m.key}>
-                            <div className="text-xs font-semibold text-slate-500 print:text-sm">
-                              {m.icon} {m.label}
-                            </div>
-                            <div className="text-sm font-medium text-slate-900 print:text-base">
-                              {prep.tactical_notes!.team[m.key]}
-                            </div>
+                            <span
+                              className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white print:h-11 print:w-11 print:text-base ${
+                                isAbsent
+                                  ? "border-red-400 bg-red-600"
+                                  : player
+                                    ? player.isGuest
+                                      ? "border-white bg-purple-700"
+                                      : "border-white bg-slate-900"
+                                    : "border-dashed border-white/70"
+                              }`}
+                            >
+                              {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
+                            </span>
+                            <span className="max-w-[70px] truncate rounded bg-black/50 px-1 text-[9px] leading-tight text-white print:max-w-[85px] print:text-xs">
+                              {player?.name.split(" ")[0] ?? ""}
+                            </span>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
+                    </div>
+                    {Object.keys(guestNames).length > 0 && (
+                      <p className="mt-2 text-center text-xs text-purple-700 print:text-sm">
+                        G = gastspeler: {Object.values(guestNames).join(", ")}
+                      </p>
                     )}
-                    {drawing && drawing.length > 0 && (
-                      <div className="mt-2 flex justify-center">
-                        <DrawingThumbnail strokes={drawing} className="w-full max-w-[200px] rounded-lg border border-slate-200 print:max-w-[220px]" />
+                    {absentInLineup.length > 0 && (
+                      <p className="print-color-exact mx-auto mt-2 rounded-lg bg-red-50 px-2 py-1.5 text-center text-xs font-bold text-red-700 print:text-sm">
+                        ⚠️ {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
+                      </p>
+                    )}
+                    {substituteNames.length > 0 && (
+                      <div className="mt-2 text-center">
+                        <span className="text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">Wissels</span>
+                        <p className="text-sm font-medium text-slate-800 print:text-base">{substituteNames.join(" · ")}</p>
                       </div>
                     )}
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Rechts: team-tactiek — twee groepen, elk met eigen (grotere) tekening onder de tekst. */}
+              <div>
+                <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">
+                  Team-tactiek
+                </h2>
+                <div className="flex flex-col gap-4 sm:flex-row print:flex-row print:gap-6">
+                  {teamTactics.map(({ group, moments, drawing }) => (
+                    <div key={group.key} className="w-[280px] rounded-lg border border-slate-200 p-4 print:w-[320px] print:border-slate-300">
+                      <h3 className="mb-2 text-center text-sm font-bold uppercase tracking-wide text-slate-500 print:text-base">
+                        {group.title}
+                      </h3>
+                      {moments.length === 0 ? (
+                        <p className="text-sm text-slate-400 print:text-base">Niet ingevuld.</p>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {moments.map((m) => (
+                            <div key={m.key}>
+                              <div className="text-xs font-semibold text-slate-500 print:text-sm">
+                                {m.icon} {m.label}
+                              </div>
+                              <div className="text-sm font-medium text-slate-900 print:text-base">
+                                {prep.tactical_notes!.team[m.key]}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {drawing && drawing.length > 0 && (
+                        <div className="mt-3 flex justify-center">
+                          <DrawingThumbnail strokes={drawing} className="w-full max-w-[250px] rounded-lg border border-slate-200 print:max-w-[290px]" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
