@@ -504,7 +504,7 @@ export default function ProgrammaPage() {
           {canEdit ? (
             <input
               type="time"
-              className={`${inputCls} w-20 text-sm`}
+              className={`${inputCls} w-28`}
               defaultValue={item.kickoff_time ?? ""}
               onBlur={(e) =>
                 e.target.value !== (item.kickoff_time ?? "") && updateField(item, "kickoff_time", e.target.value)
