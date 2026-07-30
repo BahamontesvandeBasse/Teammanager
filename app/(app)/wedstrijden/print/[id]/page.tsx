@@ -107,10 +107,6 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     }
   });
 
-  const substituteNames = (prep?.substitutes ?? [])
-    .map((pid) => players.find((p) => p.id === pid)?.name)
-    .filter(Boolean) as string[];
-
   const drawings = prep?.drawings ?? {};
   const teamTactics = TEAM_MOMENT_GROUPS.map((group) => ({
     group,
@@ -125,6 +121,17 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
     .filter(([, pid]) => !pid.startsWith("guest:") && absentPlayerIds.has(pid))
     .map(([, pid]) => players.find((p) => p.id === pid)?.name)
     .filter(Boolean) as string[];
+
+  // Wissels op het printvel = alle actieve spelers die niet in de basis staan en niet
+  // afwezig zijn gemeld (die staan al apart bij "Afwezig") — dus altijd de volledige
+  // selectie zichtbaar, zonder dat de staf ze eerst los hoeft aan te vinken.
+  const usedPlayerIds = new Set(
+    Object.values(slotMap).filter((pid) => !pid.startsWith("guest:"))
+  );
+  const substituteNames = players
+    .filter((p) => p.active && !usedPlayerIds.has(p.id) && !absentPlayerIds.has(p.id))
+    .map((p) => p.name)
+    .sort((a, b) => a.localeCompare(b, "nl"));
 
   // Algemeen overzicht van wie er niet bij is deze wedstrijd — los van de scherpere
   // waarschuwing hierboven voor het geval iemand per ongeluk toch in de basis staat.
