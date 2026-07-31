@@ -9,13 +9,14 @@ export type AuthUser = {
   role: Role;
   player_id: string | null;
   last_login_at: string | null;
+  last_active_at: string | null;
   must_change_password: boolean;
 };
 
 export type PublicUser = Omit<AuthUser, "password_hash">;
 
-const SELECT_FIELDS = "id, email, password_hash, name, role, player_id, last_login_at, must_change_password";
-const PUBLIC_FIELDS = "id, email, name, role, player_id, last_login_at, must_change_password";
+const SELECT_FIELDS = "id, email, password_hash, name, role, player_id, last_login_at, last_active_at, must_change_password";
+const PUBLIC_FIELDS = "id, email, name, role, player_id, last_login_at, last_active_at, must_change_password";
 
 export async function findUserByEmail(email: string): Promise<AuthUser | null> {
   const rows = await sql().query(`select ${SELECT_FIELDS} from users where email = $1`, [
@@ -83,6 +84,16 @@ export async function updateUserPassword(
 
 export async function recordLogin(id: string): Promise<void> {
   await sql().query(`update users set last_login_at = now() where id = $1`, [id]);
+}
+
+// Bijgewerkt vanuit elke pagina-load van een ingelogde gebruiker (zie
+// resolveRole()) — de WHERE-clausule throttlet dit tot hooguit 1x per 5 min
+// per gebruiker, zodat normaal browsen niet op elke request een write doet.
+export async function recordActivity(id: string): Promise<void> {
+  await sql().query(
+    `update users set last_active_at = now() where id = $1 and (last_active_at is null or last_active_at < now() - interval '5 minutes')`,
+    [id]
+  );
 }
 
 export async function deleteUser(id: string): Promise<void> {

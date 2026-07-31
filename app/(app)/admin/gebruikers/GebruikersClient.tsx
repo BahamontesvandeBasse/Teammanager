@@ -8,6 +8,17 @@ import { Player } from "@/lib/types";
 
 const ASSIGNABLE_ROLES: Role[] = ["staf", "toeschouwer", "speler"];
 
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "nooit";
+  return new Date(iso).toLocaleString("nl-NL", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function GebruikersClient({
   initialUsers,
   players,
@@ -205,6 +216,7 @@ export default function GebruikersClient({
                 <th className={thCls}>Rol</th>
                 <th className={thCls}>Speler</th>
                 <th className={thCls}>Laatst ingelogd</th>
+                <th className={thCls}>Laatst actief</th>
                 <th className={thCls}>Wachtwoord</th>
                 <th className={thCls}></th>
               </tr>
@@ -232,17 +244,8 @@ export default function GebruikersClient({
                     )}
                   </td>
                   <td className={tdCls}>{playerName(u.player_id) ?? "—"}</td>
-                  <td className={`${tdCls} text-slate-500`}>
-                    {u.last_login_at
-                      ? new Date(u.last_login_at).toLocaleString("nl-NL", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "nooit"}
-                  </td>
+                  <td className={`${tdCls} text-slate-500`}>{formatDateTime(u.last_login_at)}</td>
+                  <td className={`${tdCls} text-slate-500`}>{formatDateTime(u.last_active_at)}</td>
                   <td className={tdCls}>
                     {u.must_change_password ? (
                       <Badge color="amber">moet wijzigen</Badge>

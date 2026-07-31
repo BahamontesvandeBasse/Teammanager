@@ -4,6 +4,7 @@ import { neonConfigured } from "@/lib/db/neonClient";
 import { getStore } from "@/lib/db";
 import { EntityName } from "@/lib/types";
 import { canEdit, Role, ROLES } from "@/lib/auth/roles";
+import { recordActivity } from "@/lib/auth/users";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -23,6 +24,12 @@ export const VIEW_AS_COOKIE = "view_as";
 export async function getRealRole(): Promise<Role> {
   if (!neonConfigured()) return "admin";
   const session = await auth();
+  // Bijhouden wanneer iemand voor het laatst een pagina laadde terwijl
+  // ingelogd — los van last_login_at (dat alleen de inlog-actie zelf meet).
+  // Fire-and-forget zou op serverless platforms afgebroken kunnen worden
+  // vóórdat de write klaar is, dus bewust wel awaiten; de query zelf is
+  // goedkoop en intern al geëthrottled.
+  if (session?.user?.id) await recordActivity(session.user.id);
   return (session?.user?.role as Role | undefined) ?? "toeschouwer";
 }
 
