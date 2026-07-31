@@ -1137,7 +1137,7 @@ function WedstrijdenPageInner() {
                           <th className={thCls}>Minuten</th>
                           <th className={thCls}>RPE</th>
                           <th className={thCls}>Belasting</th>
-                          <th className={thCls}>Herstel</th>
+                          <th className={thCls}>Vermoeidheid</th>
                           <th className={thCls}>Blessure</th>
                         </tr>
                       </thead>
@@ -1154,9 +1154,7 @@ function WedstrijdenPageInner() {
                                 <td className={tdCls}>{e.minutes}</td>
                                 <td className={tdCls}>{e.rpe}</td>
                                 <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
-                                <td className={tdCls}>
-                                  😴 {e.fatigue ? `${e.fatigue}/10` : "—"} · 💪 {e.soreness ? `${e.soreness}/10` : "—"}
-                                </td>
+                                <td className={tdCls}>{e.fatigue ? `${e.fatigue}/10` : "—"}</td>
                                 <td className={tdCls}>{e.injury_flag ? <Badge color="red">⚠️</Badge> : "—"}</td>
                               </>
                             )}

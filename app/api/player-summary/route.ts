@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .map((l) => {
         if (l.absent) return `- ${l.date} (${l.session_type}): afwezig`;
         const injury = l.injury_flag ? " ⚠ blessure gemeld" : "";
-        return `- ${l.date} (${l.session_type}): ${l.minutes} min, RPE ${l.rpe}, vermoeidheid ${l.fatigue}/10, spierpijn ${l.soreness}/10${injury}${l.notes ? ` — "${l.notes}"` : ""}`;
+        return `- ${l.date} (${l.session_type}): ${l.minutes} min, RPE ${l.rpe}, vermoeidheid ${l.fatigue}/10${injury}${l.notes ? ` — "${l.notes}"` : ""}`;
       })
       .join("\n");
     const injuryFlags = load.filter((l) => l.injury_flag);

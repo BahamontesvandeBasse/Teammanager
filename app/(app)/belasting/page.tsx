@@ -16,13 +16,12 @@ type LoadDraft = {
   minutes: string;
   rpe: string;
   fatigue: string;
-  soreness: string;
   injuryFlag: boolean;
   notes: string;
   absent: boolean;
 };
 
-const EMPTY_DRAFT: LoadDraft = { minutes: "", rpe: "", fatigue: "", soreness: "", injuryFlag: false, notes: "", absent: false };
+const EMPTY_DRAFT: LoadDraft = { minutes: "", rpe: "", fatigue: "", injuryFlag: false, notes: "", absent: false };
 
 const CHART_COLORS = [
   "#059669", "#dc2626", "#2563eb", "#d97706", "#7c3aed",
@@ -125,7 +124,7 @@ export default function BelastingPage() {
     setSessionType(option.sessionType);
   }
 
-  function setDraft(playerId: string, field: "minutes" | "rpe" | "fatigue" | "soreness" | "notes", value: string) {
+  function setDraft(playerId: string, field: "minutes" | "rpe" | "fatigue" | "notes", value: string) {
     setDrafts((prev) => ({
       ...prev,
       [playerId]: { ...(prev[playerId] ?? EMPTY_DRAFT), [field]: value },
@@ -183,7 +182,10 @@ export default function BelastingPage() {
           const rpe = parseInt(d.rpe, 10) || 0;
           if (minutes <= 0 || rpe <= 0) return null;
           const fatigueRaw = parseInt(d.fatigue, 10);
-          const sorenessRaw = parseInt(d.soreness, 10);
+          // Vermoeidheid en spierpijn zijn samengevoegd tot één vermoeidheidscijfer
+          // (1 = geen vermoeidheid, 10 = veel vermoeidheid) — soreness krijgt dezelfde
+          // waarde mee zodat oudere/andere plekken die nog naar soreness kijken blijven werken.
+          const fatigue = fatigueRaw >= 1 && fatigueRaw <= 10 ? fatigueRaw : null;
           return {
             player_id: p.id,
             date,
@@ -192,8 +194,8 @@ export default function BelastingPage() {
             minutes,
             rpe: Math.min(10, Math.max(1, rpe)),
             notes: d.notes.trim() || null,
-            fatigue: fatigueRaw >= 1 && fatigueRaw <= 10 ? fatigueRaw : null,
-            soreness: sorenessRaw >= 1 && sorenessRaw <= 10 ? sorenessRaw : null,
+            fatigue,
+            soreness: fatigue,
             injury_flag: d.injuryFlag,
             reported_by: "staff" as const,
           };
@@ -267,7 +269,7 @@ export default function BelastingPage() {
         const change = prevWeek > 0 ? ((thisWeek - prevWeek) / prevWeek) * 100 : thisWeek > 0 ? 100 : 0;
         const latest = latestByPlayer.get(p.id);
         // Schaal is net als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht herstel.
-        const lowRecovery = (latest?.fatigue && latest.fatigue >= 7) || (latest?.soreness && latest.soreness >= 7);
+        const lowRecovery = !!latest?.fatigue && latest.fatigue >= 7;
 
         const absenceStatus = playerAbsenceStatus(p.id, absences, today);
 
@@ -462,7 +464,7 @@ export default function BelastingPage() {
                 <th className={thCls}>Afwezig</th>
                 <th className={thCls}>Minuten</th>
                 <th className={thCls}>RPE (1–10)</th>
-                <th className={thCls}>Herstel (vermoeidheid/spierpijn)</th>
+                <th className={thCls}>Vermoeidheid (1–10)</th>
                 <th className={thCls}>Blessure</th>
               </tr>
             </thead>
@@ -484,14 +486,9 @@ export default function BelastingPage() {
                         disabled={d.absent} onChange={(e) => setDraft(p.id, "rpe", e.target.value)} />
                     </td>
                     <td className={tdCls}>
-                      <div className="flex items-center gap-1">
-                        <input type="number" min={1} max={10} className={`${inputCls} w-16`} value={d.fatigue} placeholder="😴"
-                          title="Vermoeidheid"
-                          disabled={d.absent} onChange={(e) => setDraft(p.id, "fatigue", e.target.value)} />
-                        <input type="number" min={1} max={10} className={`${inputCls} w-16`} value={d.soreness} placeholder="💪"
-                          title="Spierpijn"
-                          disabled={d.absent} onChange={(e) => setDraft(p.id, "soreness", e.target.value)} />
-                      </div>
+                      <input type="number" min={1} max={10} className={`${inputCls} w-20`} value={d.fatigue} placeholder="—"
+                        title="1 = geen vermoeidheid, 10 = veel vermoeidheid"
+                        disabled={d.absent} onChange={(e) => setDraft(p.id, "fatigue", e.target.value)} />
                     </td>
                     <td className={tdCls}>
                       <div className="flex items-center gap-1">
@@ -626,7 +623,7 @@ export default function BelastingPage() {
                       <th className={thCls}>Minuten</th>
                       <th className={thCls}>RPE</th>
                       <th className={thCls}>Belasting</th>
-                      <th className={thCls}>Herstel</th>
+                      <th className={thCls}>Vermoeidheid</th>
                       <th className={thCls}>Blessure</th>
                       <th className={thCls}></th>
                     </tr>
@@ -645,10 +642,7 @@ export default function BelastingPage() {
                             <td className={tdCls}>{e.rpe}</td>
                             <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
                             <td className={tdCls}>
-                              <div className="flex items-center gap-1">
-                                {e.fatigue ? <ScaleBadge value={e.fatigue} icon="😴" /> : "—"}
-                                {e.soreness ? <ScaleBadge value={e.soreness} icon="💪" /> : "—"}
-                              </div>
+                              {e.fatigue ? <ScaleBadge value={e.fatigue} /> : "—"}
                             </td>
                             <td className={tdCls}>
                               {e.injury_flag ? (

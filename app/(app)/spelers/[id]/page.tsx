@@ -471,7 +471,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                     <div className="text-xs text-slate-500">Afwezig</div>
                   ) : (
                     <div className="text-xs text-slate-500">
-                      {l.minutes} min · RPE {l.rpe} · vermoeidheid {l.fatigue}/10 · spierpijn {l.soreness}/10
+                      {l.minutes} min · RPE {l.rpe} · vermoeidheid {l.fatigue}/10
                       {l.notes && ` — "${l.notes}"`}
                     </div>
                   )}
