@@ -55,7 +55,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
   const tempPassword = customPassword || generateTempPassword();
 
-  await updateUserPassword(id, await hashPassword(tempPassword));
+  // Beheerder kiest/genereert dit wachtwoord, dus opnieuw verplicht wijzigen bij de eerstvolgende login.
+  await updateUserPassword(id, await hashPassword(tempPassword), true);
   return NextResponse.json({ password: tempPassword });
 }
 

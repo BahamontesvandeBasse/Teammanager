@@ -195,6 +195,7 @@ export default function GebruikersClient({
                 <th className={thCls}>Rol</th>
                 <th className={thCls}>Speler</th>
                 <th className={thCls}>Laatst ingelogd</th>
+                <th className={thCls}>Wachtwoord</th>
                 <th className={thCls}></th>
               </tr>
             </thead>
@@ -231,6 +232,13 @@ export default function GebruikersClient({
                           minute: "2-digit",
                         })
                       : "nooit"}
+                  </td>
+                  <td className={tdCls}>
+                    {u.must_change_password ? (
+                      <Badge color="amber">moet wijzigen</Badge>
+                    ) : (
+                      <Badge color="green">gewijzigd</Badge>
+                    )}
                   </td>
                   <td className={tdCls}>
                     {u.role !== "admin" && (

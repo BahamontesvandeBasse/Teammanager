@@ -9,12 +9,13 @@ export type AuthUser = {
   role: Role;
   player_id: string | null;
   last_login_at: string | null;
+  must_change_password: boolean;
 };
 
 export type PublicUser = Omit<AuthUser, "password_hash">;
 
-const SELECT_FIELDS = "id, email, password_hash, name, role, player_id, last_login_at";
-const PUBLIC_FIELDS = "id, email, name, role, player_id, last_login_at";
+const SELECT_FIELDS = "id, email, password_hash, name, role, player_id, last_login_at, must_change_password";
+const PUBLIC_FIELDS = "id, email, name, role, player_id, last_login_at, must_change_password";
 
 export async function findUserByEmail(email: string): Promise<AuthUser | null> {
   const rows = await sql().query(`select ${SELECT_FIELDS} from users where email = $1`, [
@@ -38,11 +39,15 @@ export async function createUser(
   name: string,
   passwordHash: string,
   role: Role = "staf",
-  playerId: string | null = null
+  playerId: string | null = null,
+  // Een door de beheerder gekozen wachtwoord moet bij de eerste login gewijzigd
+  // worden — alleen relevant als iemand ooit zelfregistratie met eigen
+  // wachtwoordkeuze zou krijgen zou dit anders moeten.
+  mustChangePassword = true
 ): Promise<PublicUser> {
   const rows = await sql().query(
-    `insert into users (email, name, password_hash, role, player_id) values ($1, $2, $3, $4, $5) returning ${PUBLIC_FIELDS}`,
-    [email.trim().toLowerCase(), name, passwordHash, role, playerId]
+    `insert into users (email, name, password_hash, role, player_id, must_change_password) values ($1, $2, $3, $4, $5, $6) returning ${PUBLIC_FIELDS}`,
+    [email.trim().toLowerCase(), name, passwordHash, role, playerId, mustChangePassword]
   );
   return (rows as unknown as PublicUser[])[0];
 }
@@ -64,8 +69,16 @@ export async function updateUser(
   return ((rows as unknown as PublicUser[])[0] as PublicUser) ?? null;
 }
 
-export async function updateUserPassword(id: string, passwordHash: string): Promise<void> {
-  await sql().query(`update users set password_hash = $2 where id = $1`, [id, passwordHash]);
+export async function updateUserPassword(
+  id: string,
+  passwordHash: string,
+  mustChangePassword: boolean
+): Promise<void> {
+  await sql().query(`update users set password_hash = $2, must_change_password = $3 where id = $1`, [
+    id,
+    passwordHash,
+    mustChangePassword,
+  ]);
 }
 
 export async function recordLogin(id: string): Promise<void> {

@@ -40,6 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           role: user.role,
           playerId: user.player_id,
+          mustChangePassword: user.must_change_password,
         };
       },
     }),
@@ -47,14 +48,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     jwt({ token, user }) {
       if (user) {
+        // user.id is optioneel in de basis-type van next-auth, maar onze eigen
+        // authorize() hierboven geeft 'm altijd mee.
+        token.id = user.id!;
         token.role = user.role;
         token.playerId = user.playerId;
+        token.mustChangePassword = user.mustChangePassword;
       }
       return token;
     },
     session({ session, token }) {
+      session.user.id = token.id;
       session.user.role = token.role;
       session.user.playerId = token.playerId;
+      session.user.mustChangePassword = token.mustChangePassword;
       return session;
     },
   },
