@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, inputCls, Message, PageTitle, tdCls, thCls } from "@/components/ui";
 import { ROLE_LABELS, Role } from "@/lib/auth/roles";
 import { PublicUser } from "@/lib/auth/users";
@@ -26,6 +26,14 @@ export default function GebruikersClient({
   const [busy, setBusy] = useState(false);
   const [resetFor, setResetFor] = useState<{ email: string; password: string } | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const resetForRef = useRef<HTMLDivElement>(null);
+
+  // Het tijdelijke wachtwoord staat bovenaan de pagina, terwijl de knop die 'm
+  // toont ergens in de (mogelijk lange) accountlijst eronder staat — zonder dit
+  // scrollt de admin het gewoon mis.
+  useEffect(() => {
+    if (resetFor) resetForRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [resetFor]);
 
   function playerName(id: string | null) {
     if (!id) return null;
@@ -171,17 +179,19 @@ export default function GebruikersClient({
       </Card>
 
       {resetFor && (
-        <Card className="mb-6 border-amber-300 bg-amber-50">
-          <h2 className="mb-1 text-sm font-semibold text-amber-800">Nieuw tijdelijk wachtwoord voor {resetFor.email}</h2>
-          <p className="mb-2 font-mono text-lg font-bold tracking-wide text-slate-900">{resetFor.password}</p>
-          <p className="text-xs text-amber-700">
-            Dit wordt maar één keer getoond — er is geen manier om het later opnieuw op te vragen. Deel het veilig met de
-            gebruiker; die kan na inloggen zelf een nieuw wachtwoord kiezen.
-          </p>
-          <div className="mt-3">
-            <Button variant="secondary" onClick={() => setResetFor(null)}>Sluiten</Button>
-          </div>
-        </Card>
+        <div ref={resetForRef}>
+          <Card className="mb-6 border-amber-300 bg-amber-50">
+            <h2 className="mb-1 text-sm font-semibold text-amber-800">Nieuw tijdelijk wachtwoord voor {resetFor.email}</h2>
+            <p className="mb-2 font-mono text-lg font-bold tracking-wide text-slate-900">{resetFor.password}</p>
+            <p className="text-xs text-amber-700">
+              Dit wordt maar één keer getoond — er is geen manier om het later opnieuw op te vragen. Deel het veilig met de
+              gebruiker; die kan na inloggen zelf een nieuw wachtwoord kiezen.
+            </p>
+            <div className="mt-3">
+              <Button variant="secondary" onClick={() => setResetFor(null)}>Sluiten</Button>
+            </div>
+          </Card>
+        </div>
       )}
 
       <Card>
