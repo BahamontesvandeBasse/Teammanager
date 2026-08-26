@@ -371,5 +371,4 @@ export const ENTITIES: EntityName[] = [
 
 export const TEAM_NAME = "Sv Steenwijkerwold JO19-1";
 export const ARRIVE_MINUTES_BEFORE_KICKOFF = 60;
-export const GATHER_MINUTES_BEFORE_DEPARTURE = 15;
 export const PLAYERS_PER_CAR = 4;

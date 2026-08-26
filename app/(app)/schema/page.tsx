@@ -113,7 +113,6 @@ export default function SchemaPage() {
                   <th className={thCls}>Datum</th>
                   <th className={thCls}>Wedstrijd</th>
                   <th className={thCls}>Aanwezig</th>
-                  <th className={thCls}>Vertrek</th>
                   <th className={thCls}>Wasbeurt 🧺</th>
                   <th className={thCls}>Rijders 🚗</th>
                 </tr>
@@ -134,10 +133,9 @@ export default function SchemaPage() {
                         <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uit" : "Thuis"}</Badge>
                       </td>
                       <td className={tdCls}>
-                        {isAway ? (t.gather ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>) : (t.arrive ?? "—")}
-                      </td>
-                      <td className={tdCls}>
-                        {isAway ? (t.depart ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>) : "—"}
+                        {isAway
+                          ? (t.depart ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>)
+                          : (t.arrive ?? "—")}
                       </td>
                       <td className={tdCls}>
                         {w && (
