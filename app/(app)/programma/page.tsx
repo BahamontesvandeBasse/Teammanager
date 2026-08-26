@@ -83,6 +83,8 @@ export default function ProgrammaPage() {
   const [pasteText, setPasteText] = useState("");
   const [preview, setPreview] = useState<ParsedMatch[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const [imageBusy, setImageBusy] = useState(false);
 
   const [fetchingClubId, setFetchingClubId] = useState<string | null>(null);
   const [fetchAllBusy, setFetchAllBusy] = useState(false);
@@ -155,6 +157,36 @@ export default function ProgrammaPage() {
       flash((e as Error).message, true);
     } finally {
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleScreenshot(file: File) {
+    setImageBusy(true);
+    try {
+      const imageDataUrl = await readFileAsDataUrl(file);
+      const res = await fetch("/api/parse-schedule-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Herkennen mislukt.");
+      setPreview(body.matches);
+      setMsg(null);
+    } catch (e) {
+      flash((e as Error).message, true);
+    } finally {
+      setImageBusy(false);
+      if (imageRef.current) imageRef.current.value = "";
     }
   }
 
@@ -696,10 +728,10 @@ export default function ProgrammaPage() {
         <>
           <CollapsibleCard
             title="Activiteit toevoegen of wedstrijden importeren"
-            subtitle="Plakken vanaf voetbal.nl, Excel/CSV-upload, of handmatig een wedstrijd/training/toernooi"
+            subtitle="Plakken vanaf voetbal.nl, screenshot, Excel/CSV-upload, of handmatig een wedstrijd/training/toernooi"
             className="mt-6"
           >
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-3">
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Plakken vanaf voetbal.nl</h3>
                 <textarea
@@ -711,6 +743,26 @@ export default function ProgrammaPage() {
                 <div className="mt-3">
                   <Button onClick={handlePaste} disabled={!pasteText.trim()}>Tekst verwerken</Button>
                 </div>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Of upload een screenshot</h3>
+                <input
+                  ref={imageRef}
+                  type="file"
+                  accept="image/*"
+                  className="text-sm"
+                  disabled={imageBusy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleScreenshot(f);
+                  }}
+                />
+                <p className="mt-2 text-xs text-slate-500">
+                  {imageBusy
+                    ? "Bezig met herkennen…"
+                    : "Handig als een link naar voetbal.nl niet werkt (bv. omdat die pagina alleen ingelogd te zien is) — maak gewoon een screenshot van het programma en upload die. AI leest de wedstrijden eruit."}
+                </p>
               </div>
 
               <div>

@@ -139,7 +139,7 @@ export function parsePlayersFile(data: ArrayBuffer): ParsedPlayer[] {
 
 export type ParsedMatch = Omit<Match, "id">;
 
-function matchFromTeams(
+export function matchFromTeams(
   date: string,
   time: string,
   homeTeam: string,
