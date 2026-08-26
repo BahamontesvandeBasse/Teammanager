@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { ageFromBirthdate, formatDate, isoWeek, todayIso } from "@/lib/format";
+import { ageFromBirthdate, formatDate, formatDateShort, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { isTrainingActivity } from "@/lib/training";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, SparklineColor, inputCls, thCls, tdCls } from "@/components/ui";
@@ -34,6 +34,15 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const ABSENCE_MIN_DAYS_NOTICE = 7;
+const LOAD_SELF_WINDOW_DAYS = 10;
+
 export default function PlayerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const canEdit = useCanEdit();
   const role = useRole();
@@ -56,6 +65,23 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [err, setErr] = useState(false);
 
   // ---------- Zelfbediening voor de ingelogde speler zelf ----------
+  const [beSelectedSession, setBeSelectedSession] = useState("");
+  const [beAbsent, setBeAbsent] = useState(false);
+  const [beMinutes, setBeMinutes] = useState("90");
+  const [beRpe, setBeRpe] = useState("");
+  const [beFatigue, setBeFatigue] = useState("");
+  const [beSoreness, setBeSoreness] = useState("");
+  const [beInjury, setBeInjury] = useState(false);
+  const [beNotes, setBeNotes] = useState("");
+  const [beBusy, setBeBusy] = useState(false);
+  const [beMsg, setBeMsg] = useState<string | null>(null);
+
+  const [afFrom, setAfFrom] = useState("");
+  const [afUntil, setAfUntil] = useState("");
+  const [afReason, setAfReason] = useState("");
+  const [afBusy, setAfBusy] = useState(false);
+  const [afMsg, setAfMsg] = useState<string | null>(null);
+
   const [spCategory, setSpCategory] = useState<SetPieceCategory>(SET_PIECE_CATEGORIES[0]);
   const [spSide, setSpSide] = useState<SetPieceSide>("attacking");
   const [spTitle, setSpTitle] = useState("");
@@ -112,6 +138,71 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   async function updateBirthdate(value: string) {
     await api.update("players", id, { birthdate: value || null });
     await reload();
+  }
+
+  async function submitLoadEntry(option: { date: string; sessionType: "training" | "wedstrijd" }) {
+    setBeBusy(true);
+    setBeMsg(null);
+    try {
+      const res = await fetch("/api/load-entries/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: option.date,
+          session_type: option.sessionType,
+          absent: beAbsent,
+          minutes: beAbsent ? null : beMinutes,
+          rpe: beAbsent ? null : beRpe,
+          fatigue: beAbsent ? null : beFatigue || null,
+          soreness: beAbsent ? null : beSoreness || null,
+          injury_flag: beInjury,
+          notes: beNotes,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Versturen mislukt");
+      setBeMsg("Belasting opgeslagen — bedankt!");
+      setBeSelectedSession("");
+      setBeAbsent(false);
+      setBeMinutes("90");
+      setBeRpe("");
+      setBeFatigue("");
+      setBeSoreness("");
+      setBeInjury(false);
+      setBeNotes("");
+      await reload();
+    } catch (e) {
+      setBeMsg((e as Error).message);
+    } finally {
+      setBeBusy(false);
+    }
+  }
+
+  async function submitAbsence() {
+    if (!afFrom || !afUntil) {
+      setAfMsg("Vul een van- en tot-datum in.");
+      return;
+    }
+    setAfBusy(true);
+    setAfMsg(null);
+    try {
+      const res = await fetch("/api/absences/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: afFrom, until: afUntil, reason: afReason }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Versturen mislukt");
+      setAfMsg("Afwezigheid gemeld.");
+      setAfFrom("");
+      setAfUntil("");
+      setAfReason("");
+      await reload();
+    } catch (e) {
+      setAfMsg((e as Error).message);
+    } finally {
+      setAfBusy(false);
+    }
   }
 
   async function submitSetPiece() {
@@ -190,6 +281,32 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   }
 
   const isOwnPlayer = role === "speler" && ownPlayerId === id;
+
+  // ---------- Zelfbediening: belasting invullen ----------
+  const selfToday = todayIso();
+  const filledSessionKeys = new Set(load.map((l) => `${l.date}|${l.session_type}`));
+  const selfSessionOptions = [
+    ...scheduleItems
+      .filter((s) => isTrainingActivity(s.activity) && s.date >= addDaysIso(selfToday, -LOAD_SELF_WINDOW_DAYS) && s.date <= selfToday)
+      .map((s) => ({ value: `sched:${s.id}`, date: s.date, sessionType: "training" as const, label: `${formatDateShort(s.date)} — ${s.activity}` })),
+    ...matches
+      .filter((m) => m.date >= addDaysIso(selfToday, -LOAD_SELF_WINDOW_DAYS) && m.date <= selfToday)
+      .map((m) => ({
+        value: `match:${m.id}`,
+        date: m.date,
+        sessionType: "wedstrijd" as const,
+        label: `${formatDateShort(m.date)} — Wedstrijd ${m.home_away === "home" ? "thuis" : "uit"} tegen ${m.opponent}`,
+      })),
+  ]
+    .filter((o) => !filledSessionKeys.has(`${o.date}|${o.sessionType}`))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const selectedSelfSession = selfSessionOptions.find((o) => o.value === beSelectedSession) ?? null;
+
+  // ---------- Zelfbediening: afwezigheid melden ----------
+  const ownFutureAbsences = absences
+    .filter((a) => a.player_id === id && a.until >= selfToday)
+    .sort((a, b) => a.from.localeCompare(b.from));
+  const absenceMinFrom = addDaysIso(selfToday, ABSENCE_MIN_DAYS_NOTICE);
 
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const totals = stats.reduce(
@@ -281,6 +398,162 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
       {isOwnPlayer && (
         <>
+          <Card className="mb-6">
+            <h2 className="mb-1 font-semibold">Belasting invullen ❤️</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Vul na een training of wedstrijd je belasting in. Let op: dit kan je maar één keer per sessie — controleer het dus
+              even voor je verstuurt, daarna kun je het niet meer aanpassen (vraag dan de staf).
+            </p>
+            {selfSessionOptions.length === 0 ? (
+              <p className="text-sm text-slate-500">Geen recente trainingen of wedstrijden meer om in te vullen.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <select className={inputCls} value={beSelectedSession} onChange={(e) => setBeSelectedSession(e.target.value)}>
+                  <option value="">— Kies een training of wedstrijd —</option>
+                  {selfSessionOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+
+                {selectedSelfSession && (
+                  <>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={beAbsent} onChange={(e) => setBeAbsent(e.target.checked)} />
+                      Ik was hier niet bij
+                    </label>
+
+                    {!beAbsent && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">Minuten</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={180}
+                              className={inputCls}
+                              value={beMinutes}
+                              onChange={(e) => setBeMinutes(e.target.value)}
+                            />
+                          </label>
+                          <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">RPE — hoe zwaar? (1-10)</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              className={inputCls}
+                              placeholder="1-10"
+                              value={beRpe}
+                              onChange={(e) => setBeRpe(e.target.value)}
+                            />
+                          </label>
+                          <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">Vermoeidheid (1-10, optioneel)</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              className={inputCls}
+                              value={beFatigue}
+                              onChange={(e) => setBeFatigue(e.target.value)}
+                            />
+                          </label>
+                          <label className="text-sm">
+                            <span className="mb-1 block text-xs text-slate-500">Spierpijn (1-10, optioneel)</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              className={inputCls}
+                              value={beSoreness}
+                              onChange={(e) => setBeSoreness(e.target.value)}
+                            />
+                          </label>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" checked={beInjury} onChange={(e) => setBeInjury(e.target.checked)} />
+                          Ik heb ergens pijn/een blessure
+                        </label>
+                        {beInjury && (
+                          <textarea
+                            className={inputCls}
+                            rows={2}
+                            placeholder="Waar doet het pijn en sinds wanneer?"
+                            value={beNotes}
+                            onChange={(e) => setBeNotes(e.target.value)}
+                          />
+                        )}
+                      </>
+                    )}
+
+                    <Button
+                      onClick={() => submitLoadEntry({ date: selectedSelfSession.date, sessionType: selectedSelfSession.sessionType })}
+                      disabled={beBusy || (!beAbsent && !beRpe)}
+                    >
+                      {beBusy ? "Bezig…" : "Versturen"}
+                    </Button>
+                  </>
+                )}
+                {beMsg && <div className="text-xs text-slate-600">{beMsg}</div>}
+              </div>
+            )}
+          </Card>
+
+          <Card className="mb-6">
+            <h2 className="mb-1 font-semibold">Afwezigheid melden 🗓️</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Weet je dat je een keer niet kunt? Meld het hier — moet minstens {ABSENCE_MIN_DAYS_NOTICE} dagen van tevoren. Is het
+              binnen die periode, bel dan de trainer.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="text-sm">
+                <span className="mb-1 block text-xs text-slate-500">Van</span>
+                <input
+                  type="date"
+                  className={inputCls}
+                  min={absenceMinFrom}
+                  value={afFrom}
+                  onChange={(e) => setAfFrom(e.target.value)}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-xs text-slate-500">Tot en met</span>
+                <input
+                  type="date"
+                  className={inputCls}
+                  min={afFrom || absenceMinFrom}
+                  value={afUntil}
+                  onChange={(e) => setAfUntil(e.target.value)}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-xs text-slate-500">Reden (optioneel)</span>
+                <input type="text" className={inputCls} value={afReason} onChange={(e) => setAfReason(e.target.value)} />
+              </label>
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Button onClick={submitAbsence} disabled={afBusy || !afFrom || !afUntil}>
+                {afBusy ? "Bezig…" : "Melden"}
+              </Button>
+              {afMsg && <span className="text-xs text-slate-600">{afMsg}</span>}
+            </div>
+
+            {ownFutureAbsences.length > 0 && (
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Jouw gemelde afwezigheid</h3>
+                <div className="flex flex-col gap-1 text-xs text-slate-600">
+                  {ownFutureAbsences.map((a) => (
+                    <div key={a.id}>
+                      {formatDateShort(a.from)} t/m {formatDateShort(a.until)}
+                      {a.reason && <span> — {a.reason}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+
           <Card className="mb-6">
             <h2 className="mb-1 font-semibold">Spelhervattingen 🚩</h2>
             <p className="mb-3 text-xs text-slate-500">

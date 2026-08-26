@@ -203,6 +203,10 @@ export type Absence = {
   from: string; // YYYY-MM-DD
   until: string; // YYYY-MM-DD, inclusief
   reason: string | null;
+  reported_by: "staff" | "player";
+  // true zodra de staf een door een speler gemelde afwezigheid heeft gezien — staf-ingevoerde
+  // afwezigheden zijn per definitie al "gezien" en staan dus direct op true.
+  acknowledged: boolean;
 };
 
 // KNVB-indeling: elke tactische aanwijzing valt in één van deze 4 momenten.

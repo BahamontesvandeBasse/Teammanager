@@ -411,7 +411,7 @@ export default function ProgrammaPage() {
         await api.update("absences", editingAbsenceId, patch);
         flash("Afwezigheid bijgewerkt.");
       } else {
-        await api.create("absences", patch);
+        await api.create("absences", { ...patch, reported_by: "staff" as const, acknowledged: true });
         flash("Afwezigheid toegevoegd.");
       }
       resetAbsenceForm();
@@ -427,6 +427,11 @@ export default function ProgrammaPage() {
     await reload();
   }
 
+  async function acknowledgeAbsence(a: Absence) {
+    await api.update("absences", a.id, { acknowledged: true });
+    await reload();
+  }
+
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
   const today = todayIso();
@@ -434,6 +439,9 @@ export default function ProgrammaPage() {
   const relevantClubs = clubs.filter((c) => awayOpponents.has(c.name.toLowerCase()));
   const hasMissingTravel = relevantClubs.some((c) => c.travel_time_minutes == null);
   const hasActiveAbsence = absences.some((a) => today >= a.from && today <= a.until);
+  const newPlayerAbsences = absences
+    .filter((a) => a.reported_by === "player" && !a.acknowledged)
+    .sort((a, b) => a.from.localeCompare(b.from));
   const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(filteredAgendaRows, (r) => r.date, today);
 
   function agendaRow(row: AgendaRow, showResult: boolean) {
@@ -599,6 +607,39 @@ export default function ProgrammaPage() {
       />
 
       <Message text={msg} error={err} />
+
+      {canEdit && newPlayerAbsences.length > 0 && (
+        <Card className="mb-6 border-amber-300 bg-amber-50">
+          <h2 className="mb-1 font-semibold text-amber-900">
+            Nieuwe afwezigheidsmeldingen van spelers ({newPlayerAbsences.length})
+          </h2>
+          <p className="mb-3 text-xs text-amber-800">
+            Deze zijn direct actief, maar zijn nog niet door de staf bekeken.
+          </p>
+          <div className="flex flex-col gap-2">
+            {newPlayerAbsences.map((a) => {
+              const name = players.find((p) => p.id === a.player_id)?.name ?? "?";
+              return (
+                <div
+                  key={a.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2"
+                >
+                  <span className="text-sm">
+                    <span className="font-medium">{name}</span> — {formatDateShort(a.from)} t/m {formatDateShort(a.until)}
+                    {a.reason && <span className="text-slate-500"> ({a.reason})</span>}
+                  </span>
+                  <button
+                    onClick={() => acknowledgeAbsence(a)}
+                    className="text-xs font-medium text-emerald-600 hover:underline"
+                  >
+                    ✓ gezien
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       <CollapsibleCard
         title="Afwezigheid beheren"

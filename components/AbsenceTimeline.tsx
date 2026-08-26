@@ -63,7 +63,9 @@ function TimelineSection({
     cursor = addMonths(cursor, 1);
   }
 
-  const todayPct = (daysBetween(rangeStart, today) / totalDays) * 100;
+  // +0.5 dag: anders staat de lijn precies op de grens met gisteren (dezelfde
+  // pixel als gisterens rechterrand), wat oogt alsof 'ie een dag achterloopt.
+  const todayPct = ((daysBetween(rangeStart, today) + 0.5) / totalDays) * 100;
 
   return (
     <div>
