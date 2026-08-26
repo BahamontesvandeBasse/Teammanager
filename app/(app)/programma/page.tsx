@@ -142,12 +142,39 @@ export default function ProgrammaPage() {
 
   // ---------- Wedstrijden importeren / handmatig toevoegen ----------
 
-  function readFileAsDataUrl(file: File): Promise<string> {
+  // Verkleint de screenshot vóór verzending: een onbewerkte printscreen (zeker
+  // op een retina/high-dpi laptopscherm) kan als base64 ruim boven de 4,5MB
+  // request-limiet van de Vercel-functie uitkomen, waardoor de upload zonder
+  // duidelijke foutmelding faalt. Voor het uitlezen van tekst is deze
+  // resolutie ruim voldoende.
+  function resizeImageToDataUrl(file: File, maxDim = 1600, quality = 0.85): Promise<string> {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        URL.revokeObjectURL(url);
+        if (!ctx) {
+          reject(new Error("Kon de afbeelding niet verwerken."));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Kon de afbeelding niet laden."));
+      };
+      img.src = url;
     });
   }
 
@@ -155,7 +182,7 @@ export default function ProgrammaPage() {
     setImageBusy(true);
     const timeout = AbortSignal.timeout(45000);
     try {
-      const imageDataUrl = await readFileAsDataUrl(file);
+      const imageDataUrl = await resizeImageToDataUrl(file);
       const res = await fetch("/api/parse-schedule-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
