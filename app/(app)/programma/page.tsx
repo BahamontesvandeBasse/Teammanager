@@ -746,12 +746,33 @@ export default function ProgrammaPage() {
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold">Of upload een screenshot</h3>
+                <h3 className="mb-2 text-sm font-semibold">Of plak een screenshot</h3>
+                <div
+                  tabIndex={0}
+                  onClick={() => imageRef.current?.click()}
+                  onPaste={(e) => {
+                    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
+                    const f = item?.getAsFile();
+                    if (f) handleScreenshot(f);
+                  }}
+                  className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-3 text-center text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 ${
+                    imageBusy ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-300 text-slate-500 hover:border-rose-400 hover:text-rose-600"
+                  }`}
+                >
+                  {imageBusy ? (
+                    "Bezig met herkennen…"
+                  ) : (
+                    <>
+                      <span className="font-medium">Klik hier en druk Ctrl+V</span>
+                      <span>om een gekopieerde screenshot te plakken, of klik om een bestand te kiezen</span>
+                    </>
+                  )}
+                </div>
                 <input
                   ref={imageRef}
                   type="file"
                   accept="image/*"
-                  className="text-sm"
+                  className="hidden"
                   disabled={imageBusy}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -759,9 +780,7 @@ export default function ProgrammaPage() {
                   }}
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  {imageBusy
-                    ? "Bezig met herkennen…"
-                    : "Handig als een link naar voetbal.nl niet werkt (bv. omdat die pagina alleen ingelogd te zien is) — maak gewoon een screenshot van het programma en upload die. AI leest de wedstrijden eruit."}
+                  Handig als een link naar voetbal.nl niet werkt (bv. omdat die pagina alleen ingelogd te zien is) — maak een screenshot van het programma en plak of upload die. AI leest de wedstrijden eruit.
                 </p>
               </div>
 
