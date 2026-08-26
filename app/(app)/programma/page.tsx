@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { ParsedMatch, parseMatchesFile, parseMatchesText } from "@/lib/parse";
+import { ParsedMatch } from "@/lib/parse";
 import { formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { AbsenceTimeline } from "@/components/AbsenceTimeline";
@@ -80,9 +80,7 @@ export default function ProgrammaPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
 
-  const [pasteText, setPasteText] = useState("");
   const [preview, setPreview] = useState<ParsedMatch[] | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const [imageBusy, setImageBusy] = useState(false);
 
@@ -144,22 +142,6 @@ export default function ProgrammaPage() {
 
   // ---------- Wedstrijden importeren / handmatig toevoegen ----------
 
-  async function handleFile(file: File) {
-    try {
-      const parsed = parseMatchesFile(await file.arrayBuffer());
-      if (parsed.length === 0) {
-        flash("Geen wedstrijden herkend. Verwacht kolommen zoals datum, tijd en wedstrijd/thuis/uit.", true);
-        return;
-      }
-      setPreview(parsed);
-      setMsg(null);
-    } catch (e) {
-      flash((e as Error).message, true);
-    } finally {
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
   function readFileAsDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -190,15 +172,19 @@ export default function ProgrammaPage() {
     }
   }
 
-  function handlePaste() {
-    const parsed = parseMatchesText(pasteText);
-    if (parsed.length === 0) {
-      flash("Geen wedstrijden herkend in de geplakte tekst. Elke wedstrijd heeft een datum, tijd en twee teamnamen nodig.", true);
-      return;
+  useEffect(() => {
+    function onWindowPaste(e: ClipboardEvent) {
+      if (imageBusy) return;
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+      const f = item?.getAsFile();
+      if (f) {
+        e.preventDefault();
+        handleScreenshot(f);
+      }
     }
-    setPreview(parsed);
-    setMsg(null);
-  }
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [imageBusy]);
 
   async function confirmImport(replace: boolean) {
     if (!preview) return;
@@ -214,7 +200,6 @@ export default function ProgrammaPage() {
       if (newClubs.length > 0) await api.create("clubs", newClubs);
 
       setPreview(null);
-      setPasteText("");
       await reload();
       flash(`${preview.length} wedstrijden geïmporteerd. Vul hieronder de reistijden in voor de uitwedstrijden.`);
     } catch (e) {
@@ -728,43 +713,32 @@ export default function ProgrammaPage() {
         <>
           <CollapsibleCard
             title="Activiteit toevoegen of wedstrijden importeren"
-            subtitle="Plakken vanaf voetbal.nl, screenshot, Excel/CSV-upload, of handmatig een wedstrijd/training/toernooi"
+            subtitle="Screenshot van het programma, of handmatig een wedstrijd/training/toernooi"
             className="mt-6"
           >
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div>
               <div>
-                <h3 className="mb-2 text-sm font-semibold">Plakken vanaf voetbal.nl</h3>
-                <textarea
-                  className={`${inputCls} h-40 w-full font-mono text-xs`}
-                  placeholder={"Selecteer het programma op voetbal.nl, kopieer het en plak het hier.\nBijv.:\nza 6 sep 2025 14:30\nSteenwijkerwold JO19-1 - FC Wolvega JO19-1"}
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                />
-                <div className="mt-3">
-                  <Button onClick={handlePaste} disabled={!pasteText.trim()}>Tekst verwerken</Button>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-sm font-semibold">Of plak een screenshot</h3>
+                <h3 className="mb-2 text-sm font-semibold">Wedstrijden importeren via screenshot</h3>
                 <div
-                  tabIndex={0}
-                  onClick={() => imageRef.current?.click()}
-                  onPaste={(e) => {
-                    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
-                    const f = item?.getAsFile();
-                    if (f) handleScreenshot(f);
-                  }}
-                  className={`flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-3 text-center text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 ${
-                    imageBusy ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-300 text-slate-500 hover:border-rose-400 hover:text-rose-600"
+                  className={`flex h-24 w-full flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-3 text-center text-xs ${
+                    imageBusy ? "border-slate-200 bg-slate-50 text-slate-400" : "border-slate-300 text-slate-500"
                   }`}
                 >
                   {imageBusy ? (
                     "Bezig met herkennen…"
                   ) : (
                     <>
-                      <span className="font-medium">Klik hier en druk Ctrl+V</span>
-                      <span>om een gekopieerde screenshot te plakken, of klik om een bestand te kiezen</span>
+                      <span className="font-medium">Druk ergens op deze pagina Ctrl+V om een screenshot te plakken</span>
+                      <span>
+                        of{" "}
+                        <button
+                          type="button"
+                          className="font-medium text-rose-600 underline"
+                          onClick={() => imageRef.current?.click()}
+                        >
+                          kies een foto
+                        </button>
+                      </span>
                     </>
                   )}
                 </div>
@@ -780,25 +754,8 @@ export default function ProgrammaPage() {
                   }}
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  Handig als een link naar voetbal.nl niet werkt (bv. omdat die pagina alleen ingelogd te zien is) — maak een screenshot van het programma en plak of upload die. AI leest de wedstrijden eruit.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-sm font-semibold">Of upload Excel/CSV</h3>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="text-sm"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) handleFile(f);
-                  }}
-                />
-                <p className="mt-2 text-xs text-slate-500">
-                  Kolommen worden automatisch herkend: datum, tijd, en “wedstrijd” (Team A - Team B) of aparte thuis/uit-kolommen.
-                  Thuis of uit wordt bepaald aan de hand van de teamnaam (Steenwijkerwold). Alleen voor wedstrijden.
+                  Op de telefoon: kies een screenshot uit je foto's. Op de laptop: maak een printscreen van het programma
+                  (bv. van voetbal.nl) en druk op deze pagina op Ctrl+V. AI leest de wedstrijden eruit.
                 </p>
               </div>
             </div>
