@@ -22,7 +22,7 @@ const NAV: NavItem[] = [
   { href: "/spelhervattingen", label: "Spelhervattingen", icon: "🚩" },
   { href: "/wedstrijden", label: "Wedstrijdvoorbereiding", icon: "📋", hideForSpeler: true },
   { href: "/schema", label: "Was & rijden", icon: "🚗" },
-  { href: "/training", label: "Trainingsprogramma", icon: "🎯" },
+  { href: "/training", label: "Trainingsprogramma", icon: "🎯", hideForSpeler: true },
   { href: "/belasting", label: "Belasting", icon: "❤️", hideForSpeler: true },
 ];
 

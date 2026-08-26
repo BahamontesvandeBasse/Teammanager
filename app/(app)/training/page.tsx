@@ -18,6 +18,7 @@ import {
   TrainingSession,
   WarmingUp,
 } from "@/lib/types";
+import { useRole } from "@/lib/auth/RoleProvider";
 
 function TrainingTile({ item, phases }: { item: ScheduleItem; phases: TrainingPhase[] }) {
   return (
@@ -59,6 +60,7 @@ function loadSummary(item: ScheduleItem, load: LoadEntry[]) {
 }
 
 export default function TrainingPage() {
+  const role = useRole();
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [individual, setIndividual] = useState<IndividualTraining[]>([]);
@@ -89,6 +91,16 @@ export default function TrainingPage() {
   }, []);
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+
+  // Nog in ontwikkeling — voor spelers afgeschermd totdat het goed werkt.
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Het trainingsprogramma is nog niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
 
   const openCount = individual.filter((t) => t.status === "open").length;
   const today = todayIso();

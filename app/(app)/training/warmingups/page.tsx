@@ -5,10 +5,11 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button, Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { WarmingUp } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 export default function WarmingUpsPage() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const [warmups, setWarmups] = useState<WarmingUp[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
@@ -70,6 +71,14 @@ export default function WarmingUpsPage() {
   }
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Het trainingsprogramma is nog niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { formatDateShort } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls } from "@/components/ui";
 import { IndividualTraining, Player } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 import {
   CATEGORY_ORDER,
   TRAINING_CATEGORY_ICON,
@@ -17,6 +17,7 @@ import {
 
 export default function IndividueelPage() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const [players, setPlayers] = useState<Player[]>([]);
   const [trainings, setTrainings] = useState<IndividualTraining[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +92,14 @@ export default function IndividueelPage() {
   }
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Het trainingsprogramma is nog niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
 
   const visible = trainings
     .filter((t) => (filterPlayer ? t.player_id === filterPlayer : true))

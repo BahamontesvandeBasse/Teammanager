@@ -17,7 +17,7 @@ import {
   ExercisePhase,
   ExerciseSource,
 } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 function sourceBadgeColor(source: ExerciseSource): "slate" | "green" | "amber" | "blue" {
   if (source === "ai") return "green";
@@ -36,6 +36,7 @@ export default function OefeningenPage() {
 
 function OefeningenPageInner() {
   const canEdit = useCanEdit();
+  const role = useRole();
   const searchParams = useSearchParams();
   const initialPhase = searchParams.get("phase") as ExercisePhase | null;
 
@@ -168,6 +169,14 @@ function OefeningenPageInner() {
   }
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Het trainingsprogramma is nog niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
 
   const visible = exercises
     .filter((e) => e.phase === phaseFilter)

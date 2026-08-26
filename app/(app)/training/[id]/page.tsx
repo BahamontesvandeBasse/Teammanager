@@ -18,10 +18,11 @@ import {
   TrainingPhase,
   TrainingSession,
 } from "@/lib/types";
-import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
 
 export default function TrainingSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const canEdit = useCanEdit();
+  const role = useRole();
   const { id } = use(params);
 
   const [item, setItem] = useState<ScheduleItem | null>(null);
@@ -117,6 +118,14 @@ export default function TrainingSessionPage({ params }: { params: Promise<{ id: 
   }
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
+  if (role === "speler") {
+    return (
+      <div>
+        <PageTitle title="Geen toegang" subtitle="Het trainingsprogramma is nog niet beschikbaar voor spelers." />
+        <Link href="/" className="text-sm text-rose-600 hover:underline">← Terug naar Dashboard</Link>
+      </div>
+    );
+  }
   if (notFound || !item) {
     return (
       <div>
