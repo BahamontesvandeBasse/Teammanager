@@ -222,7 +222,11 @@ export default function ProgrammaPage() {
   async function confirmImport(replace: boolean) {
     if (!preview) return;
     try {
-      if (replace) await api.clear("matches");
+      if (replace) {
+        const importedDates = new Set(preview.map((m) => m.date));
+        const toRemove = matches.filter((m) => importedDates.has(m.date));
+        await Promise.all(toRemove.map((m) => api.remove("matches", m.id)));
+      }
       await api.create("matches", preview);
       const existingClubNames = new Set(clubs.map((c) => c.name.toLowerCase()));
       const newClubs = [...new Set(
@@ -968,7 +972,7 @@ export default function ProgrammaPage() {
               <div className="mt-4 flex gap-3">
                 {matches.length > 0 && (
                   <Button onClick={() => confirmImport(true)} variant="danger">
-                    Vervang huidig programma
+                    Vervang wedstrijden op dezelfde datums
                   </Button>
                 )}
                 <Button onClick={() => confirmImport(false)}>
