@@ -1,6 +1,7 @@
 import {
   ARRIVE_MINUTES_BEFORE_KICKOFF,
   Club,
+  GATHER_MINUTES_BEFORE_DEPARTURE,
   Match,
   PLAYERS_PER_CAR,
   Player,
@@ -25,29 +26,33 @@ export function minutesToTime(total: number): string {
 export type MatchTimes = {
   arrive: string | null; // aanwezig op wedstrijdlocatie
   depart: string | null; // vertrek vanaf eigen sportpark (alleen uit)
+  gather: string | null; // verzamelen bij eigen sportpark, vóór vertrek (alleen uit)
   travelMinutes: number | null;
 };
 
 /**
- * Aanwezig = aftrap − 60 min (op de locatie waar gespeeld wordt).
- * Bij uitwedstrijden: vertrek = aanwezig − reistijd naar de tegenstander.
+ * Aanwezig (op de wedstrijdlocatie) = aftrap − 60 min. Bij uitwedstrijden:
+ * vertrek (vanaf eigen sportpark) = aanwezig − reistijd, en verzamelen
+ * (gather) = vertrek − 15 min, zodat iedereen ruim op tijd bij de auto's is.
  */
 export function computeMatchTimes(match: Match, clubs: Club[]): MatchTimes {
   const kickoff = parseTimeToMinutes(match.kickoff_time);
-  if (kickoff === null) return { arrive: null, depart: null, travelMinutes: null };
+  if (kickoff === null) return { arrive: null, depart: null, gather: null, travelMinutes: null };
 
   const arrive = kickoff - ARRIVE_MINUTES_BEFORE_KICKOFF;
   if (match.home_away === "home") {
-    return { arrive: minutesToTime(arrive), depart: null, travelMinutes: null };
+    return { arrive: minutesToTime(arrive), depart: null, gather: null, travelMinutes: null };
   }
 
   const club = clubs.find(
     (c) => c.name.trim().toLowerCase() === match.opponent.trim().toLowerCase()
   );
   const travel = club?.travel_time_minutes ?? null;
+  const depart = travel !== null ? arrive - travel : null;
   return {
     arrive: minutesToTime(arrive),
-    depart: travel !== null ? minutesToTime(arrive - travel) : null,
+    depart: depart !== null ? minutesToTime(depart) : null,
+    gather: depart !== null ? minutesToTime(depart - GATHER_MINUTES_BEFORE_DEPARTURE) : null,
     travelMinutes: travel,
   };
 }
@@ -55,22 +60,25 @@ export function computeMatchTimes(match: Match, clubs: Club[]): MatchTimes {
 /**
  * Zelfde regel als bij wedstrijden, maar dan voor een seizoensplanning-item:
  * aanwezig = aftrap − 60 min op de speellocatie; vertrek = aanwezig − reistijd
- * vanaf Sportpark Sv Steenwijkerwold (alleen bij "away", thuis is reistijd 0).
+ * vanaf Sportpark Sv Steenwijkerwold (alleen bij "away", thuis is reistijd 0);
+ * verzamelen = vertrek − 15 min.
  */
 export function computeScheduleItemTimes(item: ScheduleItem): MatchTimes {
-  if (!item.kickoff_time) return { arrive: null, depart: null, travelMinutes: null };
+  if (!item.kickoff_time) return { arrive: null, depart: null, gather: null, travelMinutes: null };
   const kickoff = parseTimeToMinutes(item.kickoff_time);
-  if (kickoff === null) return { arrive: null, depart: null, travelMinutes: null };
+  if (kickoff === null) return { arrive: null, depart: null, gather: null, travelMinutes: null };
 
   const arrive = kickoff - ARRIVE_MINUTES_BEFORE_KICKOFF;
   if (item.home_away !== "away") {
-    return { arrive: minutesToTime(arrive), depart: null, travelMinutes: null };
+    return { arrive: minutesToTime(arrive), depart: null, gather: null, travelMinutes: null };
   }
 
   const travel = item.travel_time_minutes;
+  const depart = travel !== null ? arrive - travel : null;
   return {
     arrive: minutesToTime(arrive),
-    depart: travel !== null ? minutesToTime(arrive - travel) : null,
+    depart: depart !== null ? minutesToTime(depart) : null,
+    gather: depart !== null ? minutesToTime(depart - GATHER_MINUTES_BEFORE_DEPARTURE) : null,
     travelMinutes: travel,
   };
 }

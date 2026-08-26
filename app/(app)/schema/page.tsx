@@ -133,7 +133,9 @@ export default function SchemaPage() {
                         <div className="font-medium">{m.opponent}</div>
                         <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uit" : "Thuis"}</Badge>
                       </td>
-                      <td className={tdCls}>{t.arrive ?? "—"}</td>
+                      <td className={tdCls}>
+                        {isAway ? (t.gather ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>) : (t.arrive ?? "—")}
+                      </td>
                       <td className={tdCls}>
                         {isAway ? (t.depart ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>) : "—"}
                       </td>
