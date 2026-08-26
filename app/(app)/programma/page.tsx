@@ -153,19 +153,25 @@ export default function ProgrammaPage() {
 
   async function handleScreenshot(file: File) {
     setImageBusy(true);
+    const timeout = AbortSignal.timeout(45000);
     try {
       const imageDataUrl = await readFileAsDataUrl(file);
       const res = await fetch("/api/parse-schedule-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageDataUrl }),
+        signal: timeout,
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Herkennen mislukt.");
       setPreview(body.matches);
       setMsg(null);
     } catch (e) {
-      flash((e as Error).message, true);
+      if ((e as Error).name === "TimeoutError") {
+        flash("Herkennen duurde te lang (45s) en is afgebroken. Probeer het opnieuw, eventueel met een kleinere/duidelijkere screenshot.", true);
+      } else {
+        flash((e as Error).message, true);
+      }
     } finally {
       setImageBusy(false);
       if (imageRef.current) imageRef.current.value = "";

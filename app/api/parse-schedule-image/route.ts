@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { matchFromTeams, ParsedMatch, parseDutchDate } from "@/lib/parse";
 
+export const maxDuration = 60;
+
 // Herkent een geüploade screenshot van een wedstrijdprogramma (bv. voetbal.nl)
 // via Claude vision — het alternatief voor plakken/Excel wanneer de bron
 // (zoals voetbal.nl) alleen ingelogd te bekijken is en dus niet server-side
@@ -73,6 +75,7 @@ Als er geen wedstrijden op de afbeelding te zien zijn, geef dan een lege array [
           },
         ],
       }),
+      signal: AbortSignal.timeout(55000),
     });
 
     if (!res.ok) {
@@ -113,6 +116,9 @@ Als er geen wedstrijden op de afbeelding te zien zijn, geef dan een lege array [
 
     return NextResponse.json({ matches });
   } catch (e) {
+    if ((e as Error).name === "TimeoutError") {
+      return NextResponse.json({ error: "Claude reageerde niet op tijd. Probeer het opnieuw." }, { status: 504 });
+    }
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
