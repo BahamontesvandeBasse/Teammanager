@@ -2,7 +2,6 @@ import {
   Absence,
   ARRIVE_MINUTES_BEFORE_KICKOFF,
   Club,
-  CorveeDuty,
   Match,
   PLAYERS_PER_CAR,
   Player,
@@ -217,7 +216,7 @@ export function generateCorveeSchedule(
   matches: Match[],
   washDuty: { match_id: string; player_id: string }[],
   absences: Absence[],
-  existingCorvee: CorveeDuty[] = []
+  existingCorvee: { week_start: string; player_id: string }[] = []
 ): GeneratedCorvee {
   const active = players
     .filter((p) => p.active)
