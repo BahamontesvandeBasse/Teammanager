@@ -160,6 +160,8 @@ function WedstrijdenPageInner() {
   const [guestInput, setGuestInput] = useState("");
   const [pickingSlot, setPickingSlot] = useState<FormationSlot | null>(null);
   const [substitutes, setSubstitutes] = useState<string[]>([]);
+  const [guestSubstitutes, setGuestSubstitutes] = useState<string[]>([]);
+  const [newGuestSubstitute, setNewGuestSubstitute] = useState("");
   const [tactics, setTactics] = useState<TacticalNotes>(emptyTacticalNotes());
   const [selectedLine, setSelectedLine] = useState<Line>("verdediging");
   const [selectedSetPieceIds, setSelectedSetPieceIds] = useState<string[]>([]);
@@ -245,6 +247,8 @@ function WedstrijdenPageInner() {
     setGuestNames(guests);
     setGuestInput("");
     setSubstitutes(prep?.substitutes ?? []);
+    setGuestSubstitutes(prep?.guest_substitutes ?? []);
+    setNewGuestSubstitute("");
     setPickingSlot(null);
     setTactics(mergeTacticalNotes(prep?.tactical_notes));
     setSelectedLine("verdediging");
@@ -329,6 +333,19 @@ function WedstrijdenPageInner() {
     setSubstitutes((prev) => (prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]));
   }
 
+  // Voor spelers van een ander team die alleen op de bank staan (geen eigen
+  // player-rij, dus geen player_id om aan te vinken zoals bij bestaande spelers).
+  function addGuestSubstitute() {
+    const name = newGuestSubstitute.trim();
+    if (!name) return;
+    setGuestSubstitutes((prev) => [...prev, name]);
+    setNewGuestSubstitute("");
+  }
+
+  function removeGuestSubstitute(index: number) {
+    setGuestSubstitutes((prev) => prev.filter((_, i) => i !== index));
+  }
+
   // Max 4 standaardsituaties per wedstrijd — zo blijven de tekeningen op het printvel
   // groot en leesbaar in plaats van steeds kleiner naarmate er meer gekozen worden.
   const MAX_SET_PIECES = 4;
@@ -361,6 +378,7 @@ function WedstrijdenPageInner() {
         warmup_id: warmupId || null,
         lineup,
         substitutes: finalSubstitutes,
+        guest_substitutes: guestSubstitutes,
         tactical_notes: trimTacticalNotes(tactics),
         set_piece_ids: selectedSetPieceIds,
         drawings,
@@ -840,6 +858,39 @@ function WedstrijdenPageInner() {
                     );
                   })
               )}
+            </div>
+
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Gast-wisselspelers
+              </span>
+              <p className="mb-2 text-xs text-slate-500">Bv. spelers van een ander team die alleen op de bank staan.</p>
+              {guestSubstitutes.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {guestSubstitutes.map((name, i) => (
+                    <span
+                      key={`${name}-${i}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-800"
+                    >
+                      {name}
+                      <button onClick={() => removeGuestSubstitute(i)} className="text-purple-500 hover:text-purple-800">
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className={`${inputCls} flex-1`}
+                  placeholder="Naam gastspeler…"
+                  value={newGuestSubstitute}
+                  onChange={(e) => setNewGuestSubstitute(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addGuestSubstitute()}
+                />
+                <Button variant="secondary" onClick={addGuestSubstitute}>Toevoegen</Button>
+              </div>
             </div>
           </Card>
 

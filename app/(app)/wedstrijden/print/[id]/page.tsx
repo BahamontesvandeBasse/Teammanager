@@ -128,10 +128,13 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
   const usedPlayerIds = new Set(
     Object.values(slotMap).filter((pid) => !pid.startsWith("guest:"))
   );
-  const substituteNames = players
-    .filter((p) => p.active && !usedPlayerIds.has(p.id) && !absentPlayerIds.has(p.id))
-    .map((p) => p.name)
-    .sort((a, b) => a.localeCompare(b, "nl"));
+  const substituteNames = [
+    ...players
+      .filter((p) => p.active && !usedPlayerIds.has(p.id) && !absentPlayerIds.has(p.id))
+      .map((p) => p.name)
+      .sort((a, b) => a.localeCompare(b, "nl")),
+    ...(prep?.guest_substitutes ?? []).map((name) => `${name} (gast)`),
+  ];
 
   // Algemeen overzicht van wie er niet bij is deze wedstrijd — los van de scherpere
   // waarschuwing hierboven voor het geval iemand per ongeluk toch in de basis staat.

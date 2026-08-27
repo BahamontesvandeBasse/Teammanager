@@ -248,6 +248,7 @@ export type MatchPreparation = {
   // basisopstelling met positie op het veld; player_id is null bij een gastspeler (dan is guest_name gezet)
   lineup: { slot: string; player_id: string | null; guest_name?: string | null; note?: string | null }[];
   substitutes: string[]; // player-ids, wisselspelers
+  guest_substitutes: string[]; // namen van gast-wisselspelers (geen player_id, bv. van een ander team)
   tactical_notes: TacticalNotes | null; // speelwijze/aandachtspunten, per team-/linieniveau en KNVB-moment
   set_piece_ids: string[]; // gekozen spelhervattingen uit de bank (zie SetPiece), los per wedstrijd te kiezen
   // Eén tekening per onderdeel, gesleuteld op "team" of "line:verdediging"/"line:middenveld"/"line:aanval".
