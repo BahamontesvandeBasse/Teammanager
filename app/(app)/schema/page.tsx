@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { computeMatchTimes, mondayOfWeek } from "@/lib/schedule";
-import { formatDateShort } from "@/lib/format";
+import { formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { CarpoolDuty, Club, CorveeDuty, Match, Player, WashDuty } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
@@ -106,9 +106,13 @@ export default function SchemaPage() {
   const weekOnlyRows: Row[] = [...corveeByWeek.keys()]
     .filter((week_start) => !matchWeeks.has(week_start))
     .map((week_start) => ({ kind: "week", date: week_start, week_start }));
-  const rows: Row[] = [...matches.map((m): Row => ({ kind: "match", date: m.date, match: m })), ...weekOnlyRows].sort(
-    (a, b) => a.date.localeCompare(b.date)
-  );
+  // Alles vóór de huidige week is geschiedenis en hoeft hier niet meer
+  // getoond te worden — zo staat de huidige week altijd bovenaan. De
+  // seizoenstotalen hieronder blijven wel het hele seizoen meetellen.
+  const currentWeekStart = mondayOfWeek(todayIso());
+  const rows: Row[] = [...matches.map((m): Row => ({ kind: "match", date: m.date, match: m })), ...weekOnlyRows]
+    .filter((r) => r.date >= currentWeekStart)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <div>

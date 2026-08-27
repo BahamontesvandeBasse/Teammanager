@@ -199,10 +199,17 @@ export const CORVEE_TEAM_SIZE = 3;
 
 export type GeneratedCorvee = { week_start: string; player_id: string }[];
 
+function todayIsoLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /**
- * Vult corvee aan voor elke week met minstens één training die nog geen corvee
- * heeft — 3 spelers per week, eerlijk verdeeld (zelfde least-loaded-rotatie als
- * was/rijden). Twee extra regels t.o.v. was/rijden:
+ * Vult corvee aan voor elke week vanaf de huidige week (voorgaande weken
+ * tellen niet mee — dat is al gebeurd, corvee is niet met terugwerkende
+ * kracht) met minstens één training die nog geen corvee heeft — 3 spelers per
+ * week, eerlijk verdeeld (zelfde least-loaded-rotatie als was/rijden). Twee
+ * extra regels t.o.v. was/rijden:
  * - Wie die week de wasbeurt heeft (voor een wedstrijd in diezelfde week) wordt
  *   zoveel mogelijk ook bij de corvee-ploeg gezet, zodat die speler niet voor
  *   twee losse klusjes hoeft te komen.
@@ -216,16 +223,20 @@ export function generateCorveeSchedule(
   matches: Match[],
   washDuty: { match_id: string; player_id: string }[],
   absences: Absence[],
-  existingCorvee: { week_start: string; player_id: string }[] = []
+  existingCorvee: { week_start: string; player_id: string }[] = [],
+  today: string = todayIsoLocal()
 ): GeneratedCorvee {
   const active = players
     .filter((p) => p.active)
     .sort((a, b) => a.name.localeCompare(b.name, "nl"));
   if (active.length === 0) return [];
 
+  const currentWeek = mondayOfWeek(today);
   const trainingWeeks = [
     ...new Set(scheduleItems.filter((s) => isTrainingActivity(s.activity)).map((s) => mondayOfWeek(s.date))),
-  ].sort();
+  ]
+    .filter((w) => w >= currentWeek)
+    .sort();
 
   const existingWeeks = new Set(existingCorvee.map((c) => c.week_start));
   const counts = new Map<string, number>(active.map((p) => [p.id, 0]));

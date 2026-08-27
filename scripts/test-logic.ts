@@ -157,7 +157,11 @@ const absences0: Absence[] = [
   },
 ];
 
-const corvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0);
+// "Vandaag" gefixeerd op de eerste trainingsdatum van de fixture, anders vallen
+// alle testweken (2025) in het verleden t.o.v. de echte huidige datum en
+// filtert generateCorveeSchedule ze allemaal weg.
+const fixtureToday = corveeSchedule[0].date;
+const corvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], fixtureToday);
 const corveeWeeksCount = new Set(corveeSchedule.map((s) => mondayOfWeek(s.date))).size;
 check("Corvee: 3 spelers per trainingsweek", corvee.length === corveeWeeksCount * 3, `${corvee.length} vs ${corveeWeeksCount * 3}`);
 
@@ -175,8 +179,14 @@ const corveeVals = [...corveeCounts.values()];
 check("Corvee: eerlijk verdeeld (max verschil 1)", Math.max(...corveeVals) - Math.min(...corveeVals) <= 1, JSON.stringify(corveeVals));
 
 // Opnieuw genereren met de al aangemaakte rijen als "bestaand" mag niks toevoegen.
-const corveeAgain = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, corvee);
+const corveeAgain = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, corvee, fixtureToday);
 check("Corvee: opnieuw genereren voegt niks toe aan al ingevulde weken", corveeAgain.length === 0, `${corveeAgain.length} nieuwe rijen`);
+
+// Weken vóór "vandaag" tellen niet mee, ook al hebben ze nog geen corvee.
+const pastWeekToday = corveeSchedule[corveeSchedule.length - 1].date; // laatste trainingsdatum = "nu"
+const corveeFromNow = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], pastWeekToday);
+const onlyCurrentWeek = new Set(corveeFromNow.map((c) => c.week_start)).size === 1;
+check("Corvee: weken vóór de huidige week worden overgeslagen", onlyCurrentWeek, JSON.stringify([...new Set(corveeFromNow.map((c) => c.week_start))]));
 
 console.log(failures === 0 ? "\nAlles geslaagd ✅" : `\n${failures} test(s) gefaald ❌`);
 process.exit(failures === 0 ? 0 : 1);
