@@ -207,15 +207,18 @@ function todayIsoLocal(): string {
 /**
  * Vult corvee aan voor elke week vanaf de huidige week (voorgaande weken
  * tellen niet mee — dat is al gebeurd, corvee is niet met terugwerkende
- * kracht) met minstens één training die nog geen corvee heeft — 3 spelers per
- * week, eerlijk verdeeld (zelfde least-loaded-rotatie als was/rijden). Twee
- * extra regels t.o.v. was/rijden:
- * - Wie die week de wasbeurt heeft (voor een wedstrijd in diezelfde week) wordt
- *   zoveel mogelijk ook bij de corvee-ploeg gezet, zodat die speler niet voor
- *   twee losse klusjes hoeft te komen.
- * - Spelers met een bekende afwezigheid die week worden zoveel mogelijk
- *   overgeslagen (maar niet hard uitgesloten: als er te weinig beschikbare
- *   spelers overblijven, telt de eerlijke verdeling zwaarder dan dat).
+ * kracht) met minstens één training die nog geen corvee heeft. Vier regels:
+ * 1. Wie die week de wasbeurt heeft (voor een wedstrijd in diezelfde week)
+ *    hoort altijd ook bij de corveeploeg — bij meerdere wedstrijden in
+ *    dezelfde week (dus meerdere wasbeurt-spelers) tellen ze allemaal mee.
+ * 2. Spelers met een bekende afwezigheid die week worden zoveel mogelijk
+ *    overgeslagen (niet hard uitgesloten: als er te weinig beschikbare
+ *    spelers overblijven, telt de eerlijke verdeling zwaarder dan dat).
+ * 3. Eerlijk verdeeld over het seizoen (zelfde least-loaded-rotatie als
+ *    was/rijden).
+ * 4. Bij voorkeur niet twee weken achter elkaar dezelfde speler — wie er
+ *    vorige week al bij zat, wordt deze week zoveel mogelijk overgeslagen
+ *    (net als bij afwezigheid: zachte voorkeur, geen harde uitsluiting).
  */
 export function generateCorveeSchedule(
   players: Player[],
@@ -239,15 +242,26 @@ export function generateCorveeSchedule(
     .sort();
 
   const existingWeeks = new Set(existingCorvee.map((c) => c.week_start));
+  const existingByWeek = new Map<string, string[]>();
+  existingCorvee.forEach((c) => existingByWeek.set(c.week_start, [...(existingByWeek.get(c.week_start) ?? []), c.player_id]));
   const counts = new Map<string, number>(active.map((p) => [p.id, 0]));
   existingCorvee.forEach((c) => counts.has(c.player_id) && counts.set(c.player_id, counts.get(c.player_id)! + 1));
   const activeIds = new Set(active.map((p) => p.id));
   let pointer = 0;
 
+  // Wie zat er in de week vlak vóór de eerste te vullen week? (Voor regel 4.)
+  let previousWeekPlayerIds = new Set<string>(
+    trainingWeeks.length > 0 ? existingByWeek.get(addDaysLocal(trainingWeeks[0], -7)) ?? [] : []
+  );
+
   const result: GeneratedCorvee = [];
 
   for (const weekStart of trainingWeeks) {
-    if (existingWeeks.has(weekStart)) continue;
+    if (existingWeeks.has(weekStart)) {
+      // Al ingevuld (bv. handmatig aangepast) — telt wel mee als "vorige week" voor de rotatie hierna.
+      previousWeekPlayerIds = new Set(existingByWeek.get(weekStart) ?? []);
+      continue;
+    }
     const weekEnd = addDaysLocal(weekStart, 6);
 
     const absentPlayerIds = new Set(
@@ -256,17 +270,21 @@ export function generateCorveeSchedule(
         .map((a) => a.player_id as string)
     );
 
-    // Voorkeur: de speler met wasbeurt voor een wedstrijd in deze week erbij zetten.
-    const matchInWeek = matches.find((m) => m.date >= weekStart && m.date <= weekEnd);
-    const preferredId = matchInWeek ? washDuty.find((w) => w.match_id === matchInWeek.id)?.player_id : undefined;
+    // Regel 1: iedereen met wasbeurt voor een wedstrijd deze week hoort erbij.
+    const matchIdsInWeek = new Set(matches.filter((m) => m.date >= weekStart && m.date <= weekEnd).map((m) => m.id));
+    const preferredIds = washDuty.filter((w) => matchIdsInWeek.has(w.match_id)).map((w) => w.player_id);
 
     const chosen = new Set<string>();
-    if (preferredId && activeIds.has(preferredId) && !absentPlayerIds.has(preferredId)) {
-      chosen.add(preferredId);
+    for (const id of preferredIds) {
+      if (activeIds.has(id) && !absentPlayerIds.has(id)) chosen.add(id);
     }
 
+    // Regel 2 + 4 samen als "zachte" voorkeur bij het aanvullen: eerst iemand
+    // die niet afwezig is én niet vorige week al aan de beurt was; pas als dat
+    // niemand overlaat, telt de eerlijke verdeling (regel 3) zwaarder.
+    const avoid = new Set<string>([...absentPlayerIds, ...previousWeekPlayerIds]);
     while (chosen.size < CORVEE_TEAM_SIZE && chosen.size < active.length) {
-      const { id, nextPointer } = pickLeastLoaded(active, counts, pointer, chosen, absentPlayerIds);
+      const { id, nextPointer } = pickLeastLoaded(active, counts, pointer, chosen, avoid);
       chosen.add(id);
       pointer = nextPointer;
     }
@@ -275,6 +293,7 @@ export function generateCorveeSchedule(
       result.push({ week_start: weekStart, player_id: id });
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
+    previousWeekPlayerIds = chosen;
   }
 
   return result;

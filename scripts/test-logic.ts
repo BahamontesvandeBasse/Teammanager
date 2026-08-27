@@ -178,6 +178,36 @@ corvee.forEach((c) => corveeCounts.set(c.player_id, (corveeCounts.get(c.player_i
 const corveeVals = [...corveeCounts.values()];
 check("Corvee: eerlijk verdeeld (max verschil 1)", Math.max(...corveeVals) - Math.min(...corveeVals) <= 1, JSON.stringify(corveeVals));
 
+// Twee wedstrijden in dezelfde week, met twee verschillende wasbeurt-spelers —
+// allebei horen ze bij de corvee van die week (regel 1), niet maar één van de twee.
+const secondMatchSameWeek: Match = { ...matches[1], id: "m-week0-2", date: corveeSchedule[0].date };
+const washSecond: WashDuty = { id: "w0b", match_id: secondMatchSameWeek.id, player_id: corveePlayers[1].id };
+const corveeMultiMatch = generateCorveeSchedule(
+  players,
+  corveeSchedule,
+  [matchWeek0[0], secondMatchSameWeek],
+  [wash0[0], washSecond],
+  absences0,
+  [],
+  fixtureToday
+);
+const week0MultiDuties = corveeMultiMatch.filter((c) => c.week_start === week0).map((c) => c.player_id);
+check(
+  "Corvee: bij 2 wedstrijden in dezelfde week horen beide wasbeurt-spelers erbij",
+  week0MultiDuties.includes(corveePlayers[0].id) && week0MultiDuties.includes(corveePlayers[1].id),
+  JSON.stringify(week0MultiDuties)
+);
+
+// Regel 4: bij voorkeur niet 2 weken achter elkaar dezelfde speler.
+const corveeWeeksSorted = [...new Set(corvee.map((c) => c.week_start))].sort();
+let repeatFound = false;
+for (let i = 1; i < corveeWeeksSorted.length; i++) {
+  const prevTeam = new Set(corvee.filter((c) => c.week_start === corveeWeeksSorted[i - 1]).map((c) => c.player_id));
+  const thisTeam = corvee.filter((c) => c.week_start === corveeWeeksSorted[i]).map((c) => c.player_id);
+  if (thisTeam.some((id) => prevTeam.has(id))) repeatFound = true;
+}
+check("Corvee: niemand 2 weken achter elkaar (met genoeg spelers om te rouleren)", !repeatFound);
+
 // Opnieuw genereren met de al aangemaakte rijen als "bestaand" mag niks toevoegen.
 const corveeAgain = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, corvee, fixtureToday);
 check("Corvee: opnieuw genereren voegt niks toe aan al ingevulde weken", corveeAgain.length === 0, `${corveeAgain.length} nieuwe rijen`);
