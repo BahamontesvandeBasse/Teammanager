@@ -47,7 +47,7 @@ export const api = {
   clear(entity: EntityName): Promise<void> {
     return fetch(`/api/data/${entity}`, { method: "DELETE" }).then((r) => handle(r));
   },
-  generateSchedule(): Promise<{ wash: number; carpool: number }> {
+  generateSchedule(): Promise<{ wash: number; carpool: number; corvee: number }> {
     return fetch(`/api/generate-schedule`, { method: "POST" }).then((r) => handle(r));
   },
   travelTime(destination: string): Promise<{ minutes: number }> {

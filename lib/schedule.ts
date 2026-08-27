@@ -1,11 +1,14 @@
 import {
+  Absence,
   ARRIVE_MINUTES_BEFORE_KICKOFF,
   Club,
+  CorveeDuty,
   Match,
   PLAYERS_PER_CAR,
   Player,
   ScheduleItem,
 } from "./types";
+import { isTrainingActivity } from "./training";
 
 // ---------- Tijdberekeningen ----------
 
@@ -91,18 +94,23 @@ type ExistingDuty = { match_id: string; player_id: string };
 // Kiest de actieve speler met de minste beurten tot nu toe. Bij gelijke stand
 // wordt round-robin verder gerold vanaf `pointer` (zelfde volgorde als een
 // verse generatie zonder bestaande data — counts beginnen dan allemaal op 0).
+// `avoid` is een zachte uitsluiting (bv. bekende afwezigheid): wordt gebruikt
+// als er nog kandidaten buiten die groep over zijn, anders genegeerd.
 function pickLeastLoaded(
   active: Player[],
   counts: Map<string, number>,
   pointer: number,
-  exclude: Set<string>
+  exclude: Set<string>,
+  avoid: Set<string> = new Set()
 ): { id: string; nextPointer: number } {
-  const candidates = active.filter((p) => !exclude.has(p.id));
+  const withoutExcluded = active.filter((p) => !exclude.has(p.id));
+  const preferred = withoutExcluded.filter((p) => !avoid.has(p.id));
+  const candidates = preferred.length > 0 ? preferred : withoutExcluded;
   const minCount = Math.min(...candidates.map((p) => counts.get(p.id) ?? 0));
   for (let i = 0; i < active.length; i++) {
     const idx = (pointer + i) % active.length;
     const p = active[idx];
-    if (exclude.has(p.id)) continue;
+    if (!candidates.includes(p)) continue;
     if ((counts.get(p.id) ?? 0) === minCount) {
       return { id: p.id, nextPointer: idx + 1 };
     }
@@ -170,4 +178,94 @@ export function generateSchedule(
   }
 
   return { wash, carpool };
+}
+
+// ---------- Rotatie (corvee) ----------
+
+function addDaysLocal(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Maandag van de week waarin `dateIso` valt — corvee loopt per week, niet per
+// wedstrijd/training, dus alle rijen delen dezelfde week_start.
+export function mondayOfWeek(dateIso: string): string {
+  const d = new Date(`${dateIso}T00:00:00`);
+  const dayNr = (d.getDay() + 6) % 7; // maandag = 0
+  return addDaysLocal(dateIso, -dayNr);
+}
+
+export const CORVEE_TEAM_SIZE = 3;
+
+export type GeneratedCorvee = { week_start: string; player_id: string }[];
+
+/**
+ * Vult corvee aan voor elke week met minstens één training die nog geen corvee
+ * heeft — 3 spelers per week, eerlijk verdeeld (zelfde least-loaded-rotatie als
+ * was/rijden). Twee extra regels t.o.v. was/rijden:
+ * - Wie die week de wasbeurt heeft (voor een wedstrijd in diezelfde week) wordt
+ *   zoveel mogelijk ook bij de corvee-ploeg gezet, zodat die speler niet voor
+ *   twee losse klusjes hoeft te komen.
+ * - Spelers met een bekende afwezigheid die week worden zoveel mogelijk
+ *   overgeslagen (maar niet hard uitgesloten: als er te weinig beschikbare
+ *   spelers overblijven, telt de eerlijke verdeling zwaarder dan dat).
+ */
+export function generateCorveeSchedule(
+  players: Player[],
+  scheduleItems: ScheduleItem[],
+  matches: Match[],
+  washDuty: { match_id: string; player_id: string }[],
+  absences: Absence[],
+  existingCorvee: CorveeDuty[] = []
+): GeneratedCorvee {
+  const active = players
+    .filter((p) => p.active)
+    .sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  if (active.length === 0) return [];
+
+  const trainingWeeks = [
+    ...new Set(scheduleItems.filter((s) => isTrainingActivity(s.activity)).map((s) => mondayOfWeek(s.date))),
+  ].sort();
+
+  const existingWeeks = new Set(existingCorvee.map((c) => c.week_start));
+  const counts = new Map<string, number>(active.map((p) => [p.id, 0]));
+  existingCorvee.forEach((c) => counts.has(c.player_id) && counts.set(c.player_id, counts.get(c.player_id)! + 1));
+  const activeIds = new Set(active.map((p) => p.id));
+  let pointer = 0;
+
+  const result: GeneratedCorvee = [];
+
+  for (const weekStart of trainingWeeks) {
+    if (existingWeeks.has(weekStart)) continue;
+    const weekEnd = addDaysLocal(weekStart, 6);
+
+    const absentPlayerIds = new Set(
+      absences
+        .filter((a) => a.player_id && a.from <= weekEnd && a.until >= weekStart)
+        .map((a) => a.player_id as string)
+    );
+
+    // Voorkeur: de speler met wasbeurt voor een wedstrijd in deze week erbij zetten.
+    const matchInWeek = matches.find((m) => m.date >= weekStart && m.date <= weekEnd);
+    const preferredId = matchInWeek ? washDuty.find((w) => w.match_id === matchInWeek.id)?.player_id : undefined;
+
+    const chosen = new Set<string>();
+    if (preferredId && activeIds.has(preferredId) && !absentPlayerIds.has(preferredId)) {
+      chosen.add(preferredId);
+    }
+
+    while (chosen.size < CORVEE_TEAM_SIZE && chosen.size < active.length) {
+      const { id, nextPointer } = pickLeastLoaded(active, counts, pointer, chosen, absentPlayerIds);
+      chosen.add(id);
+      pointer = nextPointer;
+    }
+
+    for (const id of chosen) {
+      result.push({ week_start: weekStart, player_id: id });
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+
+  return result;
 }

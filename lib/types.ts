@@ -62,6 +62,12 @@ export type CarpoolDuty = {
   player_id: string;
 };
 
+export type CorveeDuty = {
+  id: string;
+  week_start: string; // YYYY-MM-DD, maandag van de betreffende week
+  player_id: string;
+};
+
 export type MatchStat = {
   id: string;
   match_id: string;
@@ -331,6 +337,7 @@ export type EntityMap = {
   matches: Match;
   wash_duty: WashDuty;
   carpool_duty: CarpoolDuty;
+  corvee_duty: CorveeDuty;
   match_stats: MatchStat;
   load_entries: LoadEntry;
   individual_trainings: IndividualTraining;
@@ -355,6 +362,7 @@ export const ENTITIES: EntityName[] = [
   "matches",
   "wash_duty",
   "carpool_duty",
+  "corvee_duty",
   "match_stats",
   "load_entries",
   "individual_trainings",

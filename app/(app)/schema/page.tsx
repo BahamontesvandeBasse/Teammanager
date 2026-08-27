@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { computeMatchTimes } from "@/lib/schedule";
+import { computeMatchTimes, mondayOfWeek } from "@/lib/schedule";
 import { formatDateShort } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
-import { CarpoolDuty, Club, Match, Player, WashDuty } from "@/lib/types";
+import { CarpoolDuty, Club, CorveeDuty, Match, Player, ScheduleItem, WashDuty } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 export default function SchemaPage() {
@@ -15,6 +15,8 @@ export default function SchemaPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [wash, setWash] = useState<WashDuty[]>([]);
   const [carpool, setCarpool] = useState<CarpoolDuty[]>([]);
+  const [corvee, setCorvee] = useState<CorveeDuty[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -27,13 +29,17 @@ export default function SchemaPage() {
       api.list("clubs"),
       api.list("wash_duty"),
       api.list("carpool_duty"),
+      api.list("corvee_duty"),
+      api.list("schedule_items"),
     ])
-      .then(([p, m, c, w, cp]) => {
+      .then(([p, m, c, w, cp, cv, si]) => {
         setPlayers(p);
         setMatches([...m].sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`)));
         setClubs(c);
         setWash(w);
         setCarpool(cp);
+        setCorvee([...cv].sort((a, b) => a.week_start.localeCompare(b.week_start)));
+        setScheduleItems(si);
       })
       .finally(() => setLoading(false));
 
@@ -51,9 +57,9 @@ export default function SchemaPage() {
       const res = await api.generateSchedule();
       await reload();
       setMsg(
-        res.wash === 0 && res.carpool === 0
-          ? "Niets aan te vullen — alle wedstrijden hebben al een was- en/of rijbeurt."
-          : `Aangevuld: ${res.wash} nieuwe wasbeurten en ${res.carpool} nieuwe rijbeurten. Bestaande indelingen zijn ongewijzigd gebleven.`
+        res.wash === 0 && res.carpool === 0 && res.corvee === 0
+          ? "Niets aan te vullen — alles heeft al een was-, rij- en/of corveebeurt."
+          : `Aangevuld: ${res.wash} nieuwe wasbeurten, ${res.carpool} nieuwe rijbeurten en ${res.corvee} nieuwe corveebeurten. Bestaande indelingen zijn ongewijzigd gebleven.`
       );
       setErr(false);
     } catch (e) {
@@ -74,6 +80,11 @@ export default function SchemaPage() {
     await reload();
   }
 
+  async function changeCorvee(duty: CorveeDuty, playerId: string) {
+    await api.update("corvee_duty", duty.id, { player_id: playerId });
+    await reload();
+  }
+
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
   // Tellingen voor eerlijkheids-overzicht
@@ -81,6 +92,20 @@ export default function SchemaPage() {
   wash.forEach((w) => washCounts.set(w.player_id, (washCounts.get(w.player_id) ?? 0) + 1));
   const carCounts = new Map<string, number>();
   carpool.forEach((c) => carCounts.set(c.player_id, (carCounts.get(c.player_id) ?? 0) + 1));
+  const corveeCounts = new Map<string, number>();
+  corvee.forEach((c) => corveeCounts.set(c.player_id, (corveeCounts.get(c.player_id) ?? 0) + 1));
+
+  // Groepeer corvee-rijen per week (3 spelers per week_start).
+  const corveeWeeks = [...new Set(corvee.map((c) => c.week_start))]
+    .sort()
+    .map((week_start) => ({ week_start, duties: corvee.filter((c) => c.week_start === week_start) }));
+  const trainingCountByWeek = new Map<string, number>();
+  scheduleItems
+    .filter((s) => /training/i.test(s.activity))
+    .forEach((s) => {
+      const monday = mondayOfWeek(s.date);
+      trainingCountByWeek.set(monday, (trainingCountByWeek.get(monday) ?? 0) + 1);
+    });
 
   return (
     <div>
@@ -177,6 +202,49 @@ export default function SchemaPage() {
         </Card>
       )}
 
+      {corveeWeeks.length > 0 && (
+        <Card className="mb-6">
+          <h2 className="mb-1 font-semibold">Corvee 🧹</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            3 spelers per week: ballen oppompen, bidons vullen voor de training, en de kleedkamer/spullen checken.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className={thCls}>Week van</th>
+                  <th className={thCls}>Trainingen</th>
+                  <th className={thCls}>Corvee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {corveeWeeks.map(({ week_start, duties }) => (
+                  <tr key={week_start} className="border-b border-slate-100 align-top">
+                    <td className={`${tdCls} whitespace-nowrap`}>{formatDateShort(week_start)}</td>
+                    <td className={tdCls}>{trainingCountByWeek.get(week_start) ?? 0}</td>
+                    <td className={tdCls}>
+                      <div className="flex flex-col gap-1">
+                        {duties.map((d) => (
+                          <select
+                            key={d.id}
+                            className={inputCls}
+                            disabled={!canEdit}
+                            value={d.player_id}
+                            onChange={(e) => changeCorvee(d, e.target.value)}
+                          >
+                            {playerOptions(players, d.player_id)}
+                          </select>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {wash.length > 0 && (
         <Card>
           <h2 className="mb-3 font-semibold">Verdeling over het seizoen</h2>
@@ -187,6 +255,7 @@ export default function SchemaPage() {
                   <th className={thCls}>Speler</th>
                   <th className={thCls}>Wasbeurten</th>
                   <th className={thCls}>Rijbeurten</th>
+                  <th className={thCls}>Corveebeurten</th>
                 </tr>
               </thead>
               <tbody>
@@ -195,6 +264,7 @@ export default function SchemaPage() {
                     <td className={`${tdCls} font-medium`}>{p.name}</td>
                     <td className={tdCls}>{washCounts.get(p.id) ?? 0}</td>
                     <td className={tdCls}>{carCounts.get(p.id) ?? 0}</td>
+                    <td className={tdCls}>{corveeCounts.get(p.id) ?? 0}</td>
                   </tr>
                 ))}
               </tbody>

@@ -3,8 +3,8 @@
 
 import * as XLSX from "xlsx";
 import { parsePlayersFile, parseMatchesFile, parseMatchesText } from "../lib/parse";
-import { generateSchedule, computeMatchTimes, carsNeeded } from "../lib/schedule";
-import { Club, Match, Player } from "../lib/types";
+import { generateSchedule, generateCorveeSchedule, mondayOfWeek, computeMatchTimes, carsNeeded } from "../lib/schedule";
+import { Absence, Club, Match, Player, ScheduleItem, WashDuty } from "../lib/types";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -128,6 +128,55 @@ check("Tijd: uit vertrek = 12:55 (35 min reistijd)", tAway.depart === "12:55", J
 
 const tAwayNoTravel = computeMatchTimes({ ...awayMatch, opponent: "Onbekende Club" }, clubs);
 check("Tijd: uit zonder reistijd → geen vertrektijd", tAwayNoTravel.depart === null);
+
+// ---------- 6. Corvee ----------
+const corveePlayers = players.filter((p) => p.active); // 14 actief
+const corveeSchedule: ScheduleItem[] = Array.from({ length: 8 }, (_, i) => ({
+  id: `s${i}`,
+  date: `2025-09-${String(1 + i * 3).padStart(2, "0")}`, // om de 3 dagen, 8 weken lang
+  activity: `training ${i + 1}`,
+  kickoff_time: null,
+  home_away: null,
+  travel_time_minutes: null,
+  notes: null,
+}));
+const week0 = mondayOfWeek(corveeSchedule[0].date);
+const wash0: WashDuty[] = [{ id: "w0", match_id: matches[0].id, player_id: corveePlayers[0].id }];
+const matchWeek0: Match[] = [{ ...matches[0], date: corveeSchedule[0].date }];
+const absentPlayer = corveePlayers[5].id;
+const absences0: Absence[] = [
+  {
+    id: "a0",
+    player_id: absentPlayer,
+    staff_id: null,
+    from: week0,
+    until: mondayOfWeek(corveeSchedule[0].date),
+    reason: "test",
+    reported_by: "staff",
+    acknowledged: true,
+  },
+];
+
+const corvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0);
+const corveeWeeksCount = new Set(corveeSchedule.map((s) => mondayOfWeek(s.date))).size;
+check("Corvee: 3 spelers per trainingsweek", corvee.length === corveeWeeksCount * 3, `${corvee.length} vs ${corveeWeeksCount * 3}`);
+
+const inactiveInCorvee = corvee.some((c) => c.player_id === "p14");
+check("Corvee: inactieve speler niet ingepland", !inactiveInCorvee);
+
+const week0Duties = corvee.filter((c) => c.week_start === week0);
+check("Corvee: wasbeurt-speler zit in corvee van diezelfde week", week0Duties.some((d) => d.player_id === corveePlayers[0].id));
+check("Corvee: bekend afwezige speler die week vermeden", !week0Duties.some((d) => d.player_id === absentPlayer));
+
+const corveeCounts = new Map<string, number>();
+corveePlayers.forEach((p) => corveeCounts.set(p.id, 0));
+corvee.forEach((c) => corveeCounts.set(c.player_id, (corveeCounts.get(c.player_id) ?? 0) + 1));
+const corveeVals = [...corveeCounts.values()];
+check("Corvee: eerlijk verdeeld (max verschil 1)", Math.max(...corveeVals) - Math.min(...corveeVals) <= 1, JSON.stringify(corveeVals));
+
+// Opnieuw genereren met de al aangemaakte rijen als "bestaand" mag niks toevoegen.
+const corveeAgain = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, corvee);
+check("Corvee: opnieuw genereren voegt niks toe aan al ingevulde weken", corveeAgain.length === 0, `${corveeAgain.length} nieuwe rijen`);
 
 console.log(failures === 0 ? "\nAlles geslaagd ✅" : `\n${failures} test(s) gefaald ❌`);
 process.exit(failures === 0 ? 0 : 1);
