@@ -114,6 +114,17 @@ export default function SchemaPage() {
     .filter((r) => r.date >= currentWeekStart)
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Groepeer opeenvolgende rijen die in dezelfde week vallen (bv. een
+  // donderdag- én zaterdagwedstrijd) — zo is in één oogopslag te zien dat ze
+  // bij elkaar horen i.p.v. dat het lijkt op twee keer achter elkaar corvee.
+  const weekOf = (r: Row) => (r.kind === "match" ? mondayOfWeek(r.match.date) : r.week_start);
+  const rowGroups: Row[][] = [];
+  for (const row of rows) {
+    const last = rowGroups[rowGroups.length - 1];
+    if (last && weekOf(last[0]) === weekOf(row)) last.push(row);
+    else rowGroups.push([row]);
+  }
+
   return (
     <div>
       <PageTitle
@@ -154,8 +165,8 @@ export default function SchemaPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
-                  const weekStart = row.kind === "match" ? mondayOfWeek(row.match.date) : row.week_start;
+                {rowGroups.map((group, groupIndex) => {
+                  const weekStart = weekOf(group[0]);
                   const corveeDuties = corveeByWeek.get(weekStart) ?? [];
                   const corveeCell = (
                     <div className="flex flex-col gap-1">
@@ -176,73 +187,95 @@ export default function SchemaPage() {
                       )}
                     </div>
                   );
+                  // Afwisselende tint per week i.p.v. per rij, zodat een week met 2
+                  // wedstrijden (bv. donderdag + zaterdag) als één blok oogt.
+                  const groupBg = groupIndex % 2 === 1 ? "bg-slate-50/60" : "";
 
-                  if (row.kind === "week") {
+                  return group.map((row, rowIndex) => {
+                    const rowClasses = `align-top ${groupBg} ${
+                      rowIndex === 0 ? "border-t-2 border-t-slate-200" : "border-t-0"
+                    } ${rowIndex === group.length - 1 ? "border-b border-b-slate-200" : "border-b-0"}`;
+
+                    const inner =
+                      row.kind === "week" ? (
+                        <>
+                          <td className={`${tdCls} whitespace-nowrap`}>Week van {formatDateShort(row.week_start)}</td>
+                          <td className={`${tdCls} text-slate-400`}>— (geen wedstrijd)</td>
+                          <td className={tdCls}>—</td>
+                          <td className={tdCls}>—</td>
+                          <td className={tdCls}>—</td>
+                        </>
+                      ) : (
+                        (() => {
+                          const m = row.match;
+                          const t = computeMatchTimes(m, clubs);
+                          const w = wash.find((x) => x.match_id === m.id);
+                          const drivers = carpool.filter((x) => x.match_id === m.id);
+                          const isAway = m.home_away === "away";
+                          return (
+                            <>
+                              <td className={`${tdCls} whitespace-nowrap`}>
+                                {formatDateShort(m.date)} {m.kickoff_time}
+                              </td>
+                              <td className={tdCls}>
+                                <div className="font-medium">{m.opponent}</div>
+                                <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uit" : "Thuis"}</Badge>
+                              </td>
+                              <td className={tdCls}>
+                                {isAway
+                                  ? (t.depart ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>)
+                                  : (t.arrive ?? "—")}
+                              </td>
+                              <td className={tdCls}>
+                                {w && (
+                                  <select
+                                    className={inputCls}
+                                    disabled={!canEdit}
+                                    value={w.player_id}
+                                    onChange={(e) => changeWash(w, e.target.value)}
+                                  >
+                                    {playerOptions(players, w.player_id)}
+                                  </select>
+                                )}
+                              </td>
+                              <td className={tdCls}>
+                                {isAway ? (
+                                  <div className="flex flex-col gap-1">
+                                    {drivers.map((d) => (
+                                      <select
+                                        key={d.id}
+                                        className={inputCls}
+                                        disabled={!canEdit}
+                                        value={d.player_id}
+                                        onChange={(e) => changeCarpool(d, e.target.value)}
+                                      >
+                                        {playerOptions(players, d.player_id)}
+                                      </select>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            </>
+                          );
+                        })()
+                      );
+
+                    const key = row.kind === "match" ? row.match.id : `week-${row.week_start}`;
                     return (
-                      <tr key={`week-${row.week_start}`} className="border-b border-slate-100 align-top bg-slate-50/50">
-                        <td className={`${tdCls} whitespace-nowrap`}>Week van {formatDateShort(row.week_start)}</td>
-                        <td className={`${tdCls} text-slate-400`}>— (geen wedstrijd)</td>
-                        <td className={tdCls}>—</td>
-                        <td className={tdCls}>—</td>
-                        <td className={tdCls}>—</td>
-                        <td className={tdCls}>{corveeCell}</td>
+                      <tr key={key} className={rowClasses}>
+                        {inner}
+                        {/* Corvee geldt per week, niet per wedstrijd — één cel die over de
+                            hele weekgroep heen loopt i.p.v. herhaald op elke rij. */}
+                        {rowIndex === 0 && (
+                          <td className={tdCls} rowSpan={group.length}>
+                            {corveeCell}
+                          </td>
+                        )}
                       </tr>
                     );
-                  }
-
-                  const m = row.match;
-                  const t = computeMatchTimes(m, clubs);
-                  const w = wash.find((x) => x.match_id === m.id);
-                  const drivers = carpool.filter((x) => x.match_id === m.id);
-                  const isAway = m.home_away === "away";
-                  return (
-                    <tr key={m.id} className="border-b border-slate-100 align-top">
-                      <td className={`${tdCls} whitespace-nowrap`}>
-                        {formatDateShort(m.date)} {m.kickoff_time}
-                      </td>
-                      <td className={tdCls}>
-                        <div className="font-medium">{m.opponent}</div>
-                        <Badge color={isAway ? "blue" : "green"}>{isAway ? "Uit" : "Thuis"}</Badge>
-                      </td>
-                      <td className={tdCls}>
-                        {isAway
-                          ? (t.depart ?? <span className="text-amber-600 text-xs">reistijd invullen (Programma)</span>)
-                          : (t.arrive ?? "—")}
-                      </td>
-                      <td className={tdCls}>
-                        {w && (
-                          <select
-                            className={inputCls}
-                            disabled={!canEdit}
-                            value={w.player_id}
-                            onChange={(e) => changeWash(w, e.target.value)}
-                          >
-                            {playerOptions(players, w.player_id)}
-                          </select>
-                        )}
-                      </td>
-                      <td className={tdCls}>
-                        {isAway ? (
-                          <div className="flex flex-col gap-1">
-                            {drivers.map((d) => (
-                              <select
-                                key={d.id}
-                                className={inputCls}
-                                disabled={!canEdit}
-                                value={d.player_id}
-                                onChange={(e) => changeCarpool(d, e.target.value)}
-                              >
-                                {playerOptions(players, d.player_id)}
-                              </select>
-                            ))}
-                          </div>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className={tdCls}>{corveeCell}</td>
-                    </tr>
-                  );
+                  });
                 })}
               </tbody>
             </table>
