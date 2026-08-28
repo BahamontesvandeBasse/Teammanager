@@ -33,6 +33,31 @@ const AGENDA_WINDOW_DAYS_FUTURE = 30;
 // Losse key voor de team-gemiddelde-lijn in chartData, gegarandeerd geen player-id.
 const TEAM_AVG_KEY = "__team_avg";
 
+// Welk cijfer de trendgrafiek laat zien. "load"/"minutes" worden per week
+// opgeteld (totaal die week); "rpe"/"fatigue" worden per week gemiddeld
+// (een gemiddelde van meerdere sessies optellen zou geen zinnig cijfer geven).
+type Metric = "load" | "rpe" | "minutes" | "fatigue";
+const METRIC_OPTIONS: { value: Metric; label: string; agg: "sum" | "avg" }[] = [
+  { value: "load", label: "Belasting (minuten × RPE)", agg: "sum" },
+  { value: "rpe", label: "RPE (1-10)", agg: "avg" },
+  { value: "minutes", label: "Minuten", agg: "sum" },
+  { value: "fatigue", label: "Vermoeidheid (1-10)", agg: "avg" },
+];
+function metricValue(e: LoadEntry, metric: Metric): number | null {
+  if (metric === "load") return (e.minutes ?? 0) * (e.rpe ?? 0);
+  if (metric === "rpe") return e.rpe;
+  if (metric === "minutes") return e.minutes;
+  return e.fatigue;
+}
+
+const WEEK_WINDOW_OPTIONS: { value: string; label: string; weeks: number | null }[] = [
+  { value: "3", label: "Laatste 3 weken", weeks: 3 },
+  { value: "6", label: "Laatste 6 weken", weeks: 6 },
+  { value: "10", label: "Laatste 10 weken", weeks: 10 },
+  { value: "12", label: "Laatste 12 weken", weeks: 12 },
+  { value: "all", label: "Hele seizoen", weeks: null },
+];
+
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -53,6 +78,8 @@ export default function BelastingPage() {
   const [drafts, setDrafts] = useState<Record<string, LoadDraft>>({});
   const [agendaChoice, setAgendaChoice] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [metric, setMetric] = useState<Metric>("load");
+  const [weekWindow, setWeekWindow] = useState("10");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -352,47 +379,59 @@ export default function BelastingPage() {
     setSelectedPlayerIds([]);
   }
 
-  // Weekbelasting (som van minuten × RPE per week) per geselecteerde speler, samengevoegd
-  // tot één dataset (per week een kolom per speler) zodat de grafiek meerdere lijnen kan tonen.
-  // Plus een team-gemiddelde (over alle actieve spelers, los van de selectie) als referentielijn —
-  // zonder dat is moeilijk te zien of iemands belasting hoog/laag is t.o.v. de rest van het team.
+  // Gekozen cijfer (belasting/RPE/minuten/vermoeidheid) per week per geselecteerde
+  // speler, samengevoegd tot één dataset (per week een kolom per speler) zodat de
+  // grafiek meerdere lijnen kan tonen en spelers onderling vergeleken kunnen worden.
+  // Plus een team-gemiddelde (over alle actieve spelers, los van de selectie) als
+  // referentielijn — zonder dat is moeilijk te zien of iemands cijfer hoog/laag is
+  // t.o.v. de rest van het team. Beperkt tot de gekozen periode (laatste N weken).
+  const metricAgg = METRIC_OPTIONS.find((m) => m.value === metric)!.agg;
+  const metricLabel = METRIC_OPTIONS.find((m) => m.value === metric)!.label;
   const chartData = useMemo(() => {
     if (selectedPlayerIds.length === 0) return [];
-    const byPlayerWeek = new Map<string, Map<string, number>>();
+    const byPlayerWeek = new Map<string, Map<string, { sum: number; count: number }>>();
     const teamByWeek = new Map<string, { sum: number; count: number }>();
     const activeIds = new Set(activePlayers.map((p) => p.id));
     const weeks = new Set<string>();
     entries
       .filter((e) => !e.absent)
       .forEach((e) => {
+        const value = metricValue(e, metric);
+        if (value === null) return;
         const w = isoWeek(e.date);
-        const load = (e.minutes ?? 0) * (e.rpe ?? 0);
         if (selectedPlayerIds.includes(e.player_id)) {
           weeks.add(w);
-          const perWeek = byPlayerWeek.get(e.player_id) ?? new Map<string, number>();
-          perWeek.set(w, (perWeek.get(w) ?? 0) + load);
+          const perWeek = byPlayerWeek.get(e.player_id) ?? new Map<string, { sum: number; count: number }>();
+          const cell = perWeek.get(w) ?? { sum: 0, count: 0 };
+          cell.sum += value;
+          cell.count += 1;
+          perWeek.set(w, cell);
           byPlayerWeek.set(e.player_id, perWeek);
         }
         if (activeIds.has(e.player_id)) {
-          const agg = teamByWeek.get(w) ?? { sum: 0, count: 0 };
-          agg.sum += load;
-          agg.count += 1;
-          teamByWeek.set(w, agg);
           weeks.add(w);
+          const cell = teamByWeek.get(w) ?? { sum: 0, count: 0 };
+          cell.sum += value;
+          cell.count += 1;
+          teamByWeek.set(w, cell);
         }
       });
-    return [...weeks]
-      .sort()
-      .map((w) => {
-        const row: Record<string, string | number> = { week: w.split("-")[1] };
-        for (const id of selectedPlayerIds) {
-          row[id] = byPlayerWeek.get(id)?.get(w) ?? 0;
-        }
-        const teamAgg = teamByWeek.get(w);
-        row[TEAM_AVG_KEY] = teamAgg ? Math.round(teamAgg.sum / teamAgg.count) : 0;
-        return row;
-      });
-  }, [entries, selectedPlayerIds, activePlayers]);
+
+    const windowWeeks = WEEK_WINDOW_OPTIONS.find((o) => o.value === weekWindow)?.weeks ?? null;
+    const sortedWeeks = [...weeks].sort();
+    const limitedWeeks = windowWeeks === null ? sortedWeeks : sortedWeeks.slice(-windowWeeks);
+
+    return limitedWeeks.map((w) => {
+      const row: Record<string, string | number> = { week: w.split("-")[1] };
+      for (const id of selectedPlayerIds) {
+        const cell = byPlayerWeek.get(id)?.get(w);
+        row[id] = cell ? Math.round((metricAgg === "sum" ? cell.sum : cell.sum / cell.count) * 10) / 10 : 0;
+      }
+      const teamCell = teamByWeek.get(w);
+      row[TEAM_AVG_KEY] = teamCell ? Math.round((teamCell.sum / teamCell.count) * 10) / 10 : 0;
+      return row;
+    });
+  }, [entries, selectedPlayerIds, activePlayers, metric, metricAgg, weekWindow]);
 
   // Alle sessies (datum + type) waar minstens één invoer voor bestaat, nieuwste eerst —
   // basis voor de sessiekiezer bij de ruwe invoer (corrigeren), los van de speler-selectie
@@ -581,7 +620,28 @@ export default function BelastingPage() {
       )}
 
       <Card>
-        <h2 className="mb-3 font-semibold">Belastingtrend per speler</h2>
+        <h2 className="mb-1 font-semibold">Trend per speler</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Kies een cijfer en een periode, en vergelijk één of meerdere spelers met elkaar en met het team-gemiddelde.
+        </p>
+        <div className="mb-4 flex flex-wrap gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-500">Cijfer</span>
+            <select className={inputCls} value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
+              {METRIC_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-500">Periode</span>
+            <select className={inputCls} value={weekWindow} onChange={(e) => setWeekWindow(e.target.value)}>
+              {WEEK_WINDOW_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="mb-4">
           <div className="mb-2 flex flex-wrap gap-2">
             <button
@@ -620,7 +680,7 @@ export default function BelastingPage() {
         </div>
 
         {selectedPlayerIds.length > 0 && chartData.length === 0 && (
-          <p className="text-sm text-slate-500">Nog geen belasting-invoer voor de gekozen speler(s).</p>
+          <p className="text-sm text-slate-500">Nog geen invoer voor de gekozen speler(s) in deze periode.</p>
         )}
 
         {chartData.length > 0 && (
@@ -630,7 +690,7 @@ export default function BelastingPage() {
                 <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="week" tick={{ fontSize: 12 }} label={{ value: "week", position: "insideBottomRight", offset: -4, fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} label={{ value: metricLabel, angle: -90, position: "insideLeft", fontSize: 12 }} />
                   <Tooltip labelFormatter={(l) => `Week ${l}`} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line
@@ -657,8 +717,11 @@ export default function BelastingPage() {
               </ResponsiveContainer>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Weekbelasting = som van (minuten × RPE) per week. De gestippelde lijn is het team-gemiddelde (alle actieve
-              spelers) ter vergelijking. Let op grote sprongen (&gt;30% stijging week-op-week) — die verhogen blessurerisico.
+              {metricAgg === "sum"
+                ? `${metricLabel}: totaal per week.`
+                : `${metricLabel}: gemiddelde per week.`}{" "}
+              De gestippelde lijn is het team-gemiddelde (alle actieve spelers) ter vergelijking.
+              {metric === "load" && " Let op grote sprongen (>30% stijging week-op-week) — die verhogen blessurerisico."}
             </p>
           </>
         )}
