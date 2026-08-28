@@ -30,6 +30,8 @@ const CHART_COLORS = [
 ];
 const AGENDA_WINDOW_DAYS_PAST = 14;
 const AGENDA_WINDOW_DAYS_FUTURE = 30;
+// Losse key voor de team-gemiddelde-lijn in chartData, gegarandeerd geen player-id.
+const TEAM_AVG_KEY = "__team_avg";
 
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -103,26 +105,54 @@ export default function BelastingPage() {
     return [...fromSchedule, ...fromMatches].sort((a, b) => a.date.localeCompare(b.date));
   }, [scheduleItems, matches]);
 
-  // Zet de datum en vinkt alvast "afwezig" aan voor spelers met een lopende afwezigheidsperiode
-  // (Planning-scherm) — blijft handmatig te overschrijven. Wordt aangeroepen bij het kiezen van
-  // een datum, niet automatisch bij elke reload, zodat lopende invoer niet verloren gaat.
-  function applyDate(newDate: string) {
-    setDate(newDate);
+  // Bouwt de invoertabel voor een datum+type: waar al invoer bestaat wordt die
+  // teruggezet (zo wordt "Sessie invoeren" ook meteen het scherm om een eerder
+  // ingevulde sessie te corrigeren — zie save()), de rest krijgt alvast
+  // "afwezig" aangevinkt op basis van een lopende afwezigheidsperiode
+  // (Planning-scherm), blijft handmatig te overschrijven.
+  function buildDrafts(newDate: string, newSessionType: "training" | "wedstrijd"): Record<string, LoadDraft> {
     const d: Record<string, LoadDraft> = {};
     for (const p of activePlayers) {
-      const absent = absences.some((a) => a.player_id === p.id && newDate >= a.from && newDate <= a.until);
-      d[p.id] = { ...EMPTY_DRAFT, absent };
+      const existing = entries.find((e) => e.player_id === p.id && e.date === newDate && e.session_type === newSessionType);
+      if (existing) {
+        d[p.id] = {
+          minutes: existing.minutes != null ? String(existing.minutes) : "",
+          rpe: existing.rpe != null ? String(existing.rpe) : "",
+          fatigue: existing.fatigue != null ? String(existing.fatigue) : "",
+          injuryFlag: existing.injury_flag,
+          notes: existing.notes ?? "",
+          absent: existing.absent,
+        };
+      } else {
+        const absent = absences.some((a) => a.player_id === p.id && newDate >= a.from && newDate <= a.until);
+        d[p.id] = { ...EMPTY_DRAFT, absent };
+      }
     }
-    setDrafts(d);
+    return d;
+  }
+
+  function applyDate(newDate: string) {
+    setDate(newDate);
+    setDrafts(buildDrafts(newDate, sessionType));
+  }
+
+  function applySessionType(newSessionType: "training" | "wedstrijd") {
+    setSessionType(newSessionType);
+    setDrafts(buildDrafts(date, newSessionType));
   }
 
   function selectAgendaItem(value: string) {
     setAgendaChoice(value);
     const option = agendaOptions.find((o) => o.value === value);
     if (!option) return;
-    applyDate(option.date);
+    setDate(option.date);
     setSessionType(option.sessionType);
+    setDrafts(buildDrafts(option.date, option.sessionType));
   }
+
+  // Sessie die nu in het invoerformulier staat heeft al opgeslagen invoer —
+  // "Opslaan" werkt dan bijwerkend i.p.v. nieuwe rijen aan te maken (zie save()).
+  const existingForCurrentSession = entries.filter((e) => e.date === date && e.session_type === sessionType);
 
   function setDraft(playerId: string, field: "minutes" | "rpe" | "fatigue" | "notes", value: string) {
     setDrafts((prev) => ({
@@ -157,62 +187,50 @@ export default function BelastingPage() {
   async function save() {
     setBusy(true);
     try {
-      const rows = activePlayers
-        .map((p) => {
-          const d = drafts[p.id];
-          if (!d) return null;
+      const toCreate: Omit<LoadEntry, "id">[] = [];
+      const toUpdate: { id: string; patch: Partial<Omit<LoadEntry, "id" | "reported_by">> }[] = [];
 
-          if (d.absent) {
-            return {
-              player_id: p.id,
-              date,
-              session_type: sessionType,
-              absent: true,
-              minutes: null,
-              rpe: null,
-              notes: null,
-              fatigue: null,
-              soreness: null,
-              injury_flag: false,
-              reported_by: "staff" as const,
-            };
-          }
+      for (const p of activePlayers) {
+        const d = drafts[p.id];
+        if (!d) continue;
+        const existing = entries.find((e) => e.player_id === p.id && e.date === date && e.session_type === sessionType);
 
+        let base: Omit<LoadEntry, "id" | "player_id" | "reported_by">;
+        if (d.absent) {
+          base = { date, session_type: sessionType, absent: true, minutes: null, rpe: null, notes: null, fatigue: null, soreness: null, injury_flag: false };
+        } else {
           const minutes = parseInt(d.minutes, 10) || 0;
           const rpe = parseInt(d.rpe, 10) || 0;
-          if (minutes <= 0 || rpe <= 0) return null;
+          if (minutes <= 0 || rpe <= 0) continue; // te leeg om (opnieuw) op te slaan; bestaande invoer blijft dan ongewijzigd
           const fatigueRaw = parseInt(d.fatigue, 10);
           // Vermoeidheid en spierpijn zijn samengevoegd tot één vermoeidheidscijfer
           // (1 = geen vermoeidheid, 10 = veel vermoeidheid) — soreness krijgt dezelfde
           // waarde mee zodat oudere/andere plekken die nog naar soreness kijken blijven werken.
           const fatigue = fatigueRaw >= 1 && fatigueRaw <= 10 ? fatigueRaw : null;
-          return {
-            player_id: p.id,
-            date,
-            session_type: sessionType,
-            absent: false,
-            minutes,
-            rpe: Math.min(10, Math.max(1, rpe)),
-            notes: d.notes.trim() || null,
-            fatigue,
-            soreness: fatigue,
-            injury_flag: d.injuryFlag,
-            reported_by: "staff" as const,
-          };
-        })
-        .filter(Boolean) as Omit<LoadEntry, "id">[];
+          base = { date, session_type: sessionType, absent: false, minutes, rpe: Math.min(10, Math.max(1, rpe)), notes: d.notes.trim() || null, fatigue, soreness: fatigue, injury_flag: d.injuryFlag };
+        }
 
-      if (rows.length === 0) {
+        if (existing) {
+          // Alleen de ingevoerde velden bijwerken — reported_by (wie 'm oorspronkelijk
+          // meldde, staf of speler zelf) blijft staan zoals het was.
+          toUpdate.push({ id: existing.id, patch: base });
+        } else {
+          toCreate.push({ player_id: p.id, reported_by: "staff", ...base });
+        }
+      }
+
+      if (toCreate.length === 0 && toUpdate.length === 0) {
         setMsg("Vul voor minstens één speler minuten & RPE in, of markeer als afwezig.");
         setErr(true);
         return;
       }
-      await api.create("load_entries", rows);
-      setDrafts({});
+      if (toCreate.length > 0) await api.create("load_entries", toCreate);
+      await Promise.all(toUpdate.map((u) => api.update("load_entries", u.id, u.patch)));
       await reload();
-      const absentCount = rows.filter((r) => r.absent).length;
+      const total = toCreate.length + toUpdate.length;
+      const absentCount = [...toCreate, ...toUpdate.map((u) => u.patch)].filter((r) => r.absent).length;
       setMsg(
-        `Belasting opgeslagen voor ${rows.length} spelers (${sessionType} op ${date})${
+        `Belasting opgeslagen voor ${total} spelers (${sessionType} op ${date})${toUpdate.length > 0 ? ` — ${toUpdate.length} bijgewerkt` : ""}${
           absentCount ? `, waarvan ${absentCount} afwezig` : ""
         }.`
       );
@@ -252,19 +270,31 @@ export default function BelastingPage() {
         let thisWeek = 0;
         let prevWeek = 0;
         const byWeek = new Map<string, number>();
+        // Seizoenstotalen: los van het rollende 7-daagse venster hierboven, telt
+        // gewoon alles mee wat ooit is ingevoerd voor deze speler.
+        let seasonSessions = 0;
+        let seasonRpeSum = 0;
+        let seasonLoad = 0;
+        let seasonInjuries = 0;
         for (const e of entries) {
-          if (e.player_id !== p.id || e.absent) continue;
+          if (e.player_id !== p.id) continue;
+          if (e.injury_flag) seasonInjuries++;
+          if (e.absent) continue;
           const age = daysAgo(e.date);
           const load = (e.minutes ?? 0) * (e.rpe ?? 0);
           if (age >= 0 && age <= 6) thisWeek += load;
           else if (age >= 7 && age <= 13) prevWeek += load;
           const w = isoWeek(e.date);
           byWeek.set(w, (byWeek.get(w) ?? 0) + load);
+          seasonSessions++;
+          seasonRpeSum += e.rpe ?? 0;
+          seasonLoad += load;
         }
         const trend = [...byWeek.entries()]
           .sort((a, b) => a[0].localeCompare(b[0]))
           .slice(-6)
           .map(([, load]) => load);
+        const seasonAvgRpe = seasonSessions > 0 ? seasonRpeSum / seasonSessions : null;
 
         const change = prevWeek > 0 ? ((thisWeek - prevWeek) / prevWeek) * 100 : thisWeek > 0 ? 100 : 0;
         const latest = latestByPlayer.get(p.id);
@@ -301,7 +331,7 @@ export default function BelastingPage() {
           advice = "✅ Normale intensiteit";
         }
 
-        return { player: p, change, risk, advice, trend };
+        return { player: p, change, risk, advice, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
       })
       .sort((a, b) => {
         const order = { red: 0, amber: 1, green: 2, slate: 3 };
@@ -324,18 +354,32 @@ export default function BelastingPage() {
 
   // Weekbelasting (som van minuten × RPE per week) per geselecteerde speler, samengevoegd
   // tot één dataset (per week een kolom per speler) zodat de grafiek meerdere lijnen kan tonen.
+  // Plus een team-gemiddelde (over alle actieve spelers, los van de selectie) als referentielijn —
+  // zonder dat is moeilijk te zien of iemands belasting hoog/laag is t.o.v. de rest van het team.
   const chartData = useMemo(() => {
     if (selectedPlayerIds.length === 0) return [];
     const byPlayerWeek = new Map<string, Map<string, number>>();
+    const teamByWeek = new Map<string, { sum: number; count: number }>();
+    const activeIds = new Set(activePlayers.map((p) => p.id));
     const weeks = new Set<string>();
     entries
-      .filter((e) => selectedPlayerIds.includes(e.player_id) && !e.absent)
+      .filter((e) => !e.absent)
       .forEach((e) => {
         const w = isoWeek(e.date);
-        weeks.add(w);
-        const perWeek = byPlayerWeek.get(e.player_id) ?? new Map<string, number>();
-        perWeek.set(w, (perWeek.get(w) ?? 0) + (e.minutes ?? 0) * (e.rpe ?? 0));
-        byPlayerWeek.set(e.player_id, perWeek);
+        const load = (e.minutes ?? 0) * (e.rpe ?? 0);
+        if (selectedPlayerIds.includes(e.player_id)) {
+          weeks.add(w);
+          const perWeek = byPlayerWeek.get(e.player_id) ?? new Map<string, number>();
+          perWeek.set(w, (perWeek.get(w) ?? 0) + load);
+          byPlayerWeek.set(e.player_id, perWeek);
+        }
+        if (activeIds.has(e.player_id)) {
+          const agg = teamByWeek.get(w) ?? { sum: 0, count: 0 };
+          agg.sum += load;
+          agg.count += 1;
+          teamByWeek.set(w, agg);
+          weeks.add(w);
+        }
       });
     return [...weeks]
       .sort()
@@ -344,9 +388,11 @@ export default function BelastingPage() {
         for (const id of selectedPlayerIds) {
           row[id] = byPlayerWeek.get(id)?.get(w) ?? 0;
         }
+        const teamAgg = teamByWeek.get(w);
+        row[TEAM_AVG_KEY] = teamAgg ? Math.round(teamAgg.sum / teamAgg.count) : 0;
         return row;
       });
-  }, [entries, selectedPlayerIds]);
+  }, [entries, selectedPlayerIds, activePlayers]);
 
   // Alle sessies (datum + type) waar minstens één invoer voor bestaat, nieuwste eerst —
   // basis voor de sessiekiezer bij de ruwe invoer (corrigeren), los van de speler-selectie
@@ -390,7 +436,7 @@ export default function BelastingPage() {
         <Card className="mb-6">
           <h2 className="mb-1 font-semibold">Team overzicht</h2>
           <p className="mb-3 text-xs text-slate-500">
-            Trend in belasting per speler (laatste weken) en een advies voor de intensiteit van de komende training.
+            Trend in belasting per speler (laatste weken), een advies voor de komende training, en de seizoenstotalen.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -399,10 +445,14 @@ export default function BelastingPage() {
                   <th className={thCls}>Speler</th>
                   <th className={thCls}>Trend</th>
                   <th className={thCls}>Advies komende training</th>
+                  <th className={thCls}>Sessies</th>
+                  <th className={thCls}>Gem. RPE</th>
+                  <th className={thCls}>Totale belasting</th>
+                  <th className={thCls}>Blessures</th>
                 </tr>
               </thead>
               <tbody>
-                {teamOverview.map(({ player, risk, advice, trend }) => (
+                {teamOverview.map(({ player, risk, advice, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries }) => (
                   <tr key={player.id} className="border-b border-slate-100">
                     <td className={`${tdCls} font-medium`}>{player.name}</td>
                     <td className={tdCls}>
@@ -410,6 +460,12 @@ export default function BelastingPage() {
                     </td>
                     <td className={tdCls}>
                       <Badge color={risk}>{advice}</Badge>
+                    </td>
+                    <td className={tdCls}>{seasonSessions}</td>
+                    <td className={tdCls}>{seasonAvgRpe !== null ? seasonAvgRpe.toFixed(1) : "—"}</td>
+                    <td className={tdCls}>{seasonLoad.toLocaleString("nl-NL")}</td>
+                    <td className={tdCls}>
+                      {seasonInjuries > 0 ? <Badge color="red">{seasonInjuries}×</Badge> : "—"}
                     </td>
                   </tr>
                 ))}
@@ -442,7 +498,7 @@ export default function BelastingPage() {
         </div>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <input type="date" className={inputCls} value={date} onChange={(e) => { setAgendaChoice(""); applyDate(e.target.value); }} />
-          <select className={inputCls} value={sessionType} onChange={(e) => setSessionType(e.target.value as "training" | "wedstrijd")}>
+          <select className={inputCls} value={sessionType} onChange={(e) => applySessionType(e.target.value as "training" | "wedstrijd")}>
             <option value="training">Training</option>
             <option value="wedstrijd">Wedstrijd</option>
           </select>
@@ -450,6 +506,13 @@ export default function BelastingPage() {
             Vul alle minuten (90)
           </Button>
         </div>
+        {existingForCurrentSession.length > 0 && (
+          <p className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            ✏️ Deze sessie is al ingevuld ({existingForCurrentSession.length} speler
+            {existingForCurrentSession.length === 1 ? "" : "s"}) — de bestaande invoer staat hieronder, pas aan en
+            sla opnieuw op om te corrigeren.
+          </p>
+        )}
         {activePlayers.some((p) => drafts[p.id]?.absent) && (
           <p className="mb-3 text-xs text-amber-600">
             Alvast afwezig aangevinkt op basis van bekende afwezigheidsperiodes — controleer en pas aan waar nodig.
@@ -569,7 +632,16 @@ export default function BelastingPage() {
                   <XAxis dataKey="week" tick={{ fontSize: 12 }} label={{ value: "week", position: "insideBottomRight", offset: -4, fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip labelFormatter={(l) => `Week ${l}`} />
-                  {selectedPlayerIds.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey={TEAM_AVG_KEY}
+                    name="Team-gemiddelde"
+                    stroke="#94a3b8"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
                   {selectedPlayerIds.map((id, i) => (
                     <Line
                       key={id}
@@ -585,7 +657,8 @@ export default function BelastingPage() {
               </ResponsiveContainer>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Weekbelasting = som van (minuten × RPE) per week. Let op grote sprongen (&gt;30% stijging week-op-week) — die verhogen blessurerisico.
+              Weekbelasting = som van (minuten × RPE) per week. De gestippelde lijn is het team-gemiddelde (alle actieve
+              spelers) ter vergelijking. Let op grote sprongen (&gt;30% stijging week-op-week) — die verhogen blessurerisico.
             </p>
           </>
         )}
