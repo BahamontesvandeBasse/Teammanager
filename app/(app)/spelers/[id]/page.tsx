@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { ageFromBirthdate, formatDate, formatDateShort, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
+import { tallyAttendance } from "@/lib/attendance";
 import { isTrainingActivity } from "@/lib/training";
 import { injurySeverityColor, isSeriousInjury, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, SparklineColor, inputCls, thCls, tdCls } from "@/components/ui";
@@ -373,16 +374,15 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
   const today = todayIso();
 
-  // Alleen data meetellen op dagen die ook echt een geplande training waren — anders kan een
-  // per ongeluk dubbel of los ingevoerde belasting-registratie de teller boven het totaal duwen.
-  const trainingDates = new Set(
-    scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)
-  );
-  const totalTrainings = trainingDates.size;
-  const attendedTrainings = new Set(
-    load.filter((l) => l.session_type === "training" && !l.absent && trainingDates.has(l.date)).map((l) => l.date)
-  ).size;
-  const attendancePct = totalTrainings > 0 ? Math.round((attendedTrainings / totalTrainings) * 100) : null;
+  // Alleen data meetellen op dagen die ook echt een geplande training/wedstrijd waren —
+  // anders kan een per ongeluk dubbel of los ingevoerde belasting-registratie de teller
+  // boven het totaal duwen.
+  const trainingDates = [
+    ...new Set(scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)),
+  ];
+  const matchDates = [...new Set(matches.filter((m) => m.date < today).map((m) => m.date))];
+  const trainingTally = tallyAttendance(trainingDates, id, load, "training", absences);
+  const matchTally = tallyAttendance(matchDates, id, load, "wedstrijd", absences);
 
   const hasData = stats.length > 0 || load.length > 0 || videoNotes.length > 0;
 
@@ -753,9 +753,27 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             <h2 className="font-semibold">Belasting (laatste {recentLoad.length})</h2>
             {loadTrend.length > 0 && <Sparkline values={loadTrend} color={loadColor} />}
           </div>
-          <div className="mb-3 rounded-lg bg-slate-50 p-3 text-sm">
-            <span className="font-semibold">{attendedTrainings}</span> / <span className="font-semibold">{totalTrainings}</span> trainingen aanwezig
-            {attendancePct !== null && <span className="text-slate-500"> ({attendancePct}%)</span>}
+          <div className="mb-3 flex flex-col gap-1 rounded-lg bg-slate-50 p-3 text-sm">
+            <div>
+              <span className="font-semibold">{trainingTally.present}</span> /{" "}
+              <span className="font-semibold">{trainingTally.total}</span> trainingen aanwezig
+              {trainingTally.total > 0 && (
+                <span className="text-slate-500"> ({Math.round((trainingTally.present / trainingTally.total) * 100)}%)</span>
+              )}
+              {trainingTally.unfilled > 0 && (
+                <span className="text-amber-600"> · {trainingTally.unfilled} nog niet ingevuld</span>
+              )}
+            </div>
+            <div>
+              <span className="font-semibold">{matchTally.present}</span> /{" "}
+              <span className="font-semibold">{matchTally.total}</span> wedstrijden aanwezig
+              {matchTally.total > 0 && (
+                <span className="text-slate-500"> ({Math.round((matchTally.present / matchTally.total) * 100)}%)</span>
+              )}
+              {matchTally.unfilled > 0 && (
+                <span className="text-amber-600"> · {matchTally.unfilled} nog niet ingevuld</span>
+              )}
+            </div>
           </div>
           {injuryFlags.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-1.5">

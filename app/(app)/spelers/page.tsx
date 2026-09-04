@@ -9,8 +9,9 @@ import { Badge, Button, Card, Message, PageTitle, inputCls } from "@/components/
 import { AbsenceChip } from "@/components/PlayerAbsence";
 import { ageFromBirthdate, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
+import { tallyAttendance } from "@/lib/attendance";
 import { isTrainingActivity } from "@/lib/training";
-import { Absence, LoadEntry, Player, ScheduleItem, StaffMember } from "@/lib/types";
+import { Absence, LoadEntry, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit, useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
 
 function sortPlayers(list: Player[]): Player[] {
@@ -44,6 +45,7 @@ export default function SpelersPage() {
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [newStaffName, setNewStaffName] = useState("");
   const [newStaffRole, setNewStaffRole] = useState("");
   const [editingPositionsFor, setEditingPositionsFor] = useState<string | null>(null);
@@ -56,13 +58,15 @@ export default function SpelersPage() {
       api.list("absences"),
       api.list("schedule_items"),
       api.list("load_entries"),
+      api.list("matches"),
     ])
-      .then(([p, s, a, si, le]) => {
+      .then(([p, s, a, si, le, m]) => {
         setPlayers(sortPlayers(p));
         setStaff(s);
         setAbsences(a);
         setScheduleItems(si);
         setLoadEntries(le);
+        setMatches(m);
       })
       .finally(() => setLoading(false));
 
@@ -164,19 +168,19 @@ export default function SpelersPage() {
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
   const today = todayIso();
-  // Alleen data meetellen op dagen die ook echt een geplande training waren — anders kan een
-  // per ongeluk dubbel of los ingevoerde belasting-registratie de teller boven het totaal duwen.
-  const trainingDates = new Set(
-    scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)
-  );
-  const totalTrainings = trainingDates.size;
+  // Alleen data meetellen op dagen die ook echt een geplande training/wedstrijd waren —
+  // anders kan een per ongeluk dubbel of los ingevoerde belasting-registratie de teller
+  // boven het totaal duwen.
+  const trainingDates = [
+    ...new Set(scheduleItems.filter((i) => isTrainingActivity(i.activity) && i.date < today).map((i) => i.date)),
+  ];
+  const matchDates = [...new Set(matches.filter((m) => m.date < today).map((m) => m.date))];
 
-  function attendedTrainingsFor(playerId: string): number {
-    return new Set(
-      loadEntries
-        .filter((l) => l.player_id === playerId && l.session_type === "training" && !l.absent && trainingDates.has(l.date))
-        .map((l) => l.date)
-    ).size;
+  function trainingTallyFor(playerId: string) {
+    return tallyAttendance(trainingDates, playerId, loadEntries, "training", absences);
+  }
+  function matchTallyFor(playerId: string) {
+    return tallyAttendance(matchDates, playerId, loadEntries, "wedstrijd", absences);
   }
 
   return (
@@ -292,9 +296,26 @@ export default function SpelersPage() {
                   )}
                 </div>
 
-                {totalTrainings > 0 && (role !== "speler" || ownPlayerId === p.id) && (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <Badge color="slate">🏃 {attendedTrainingsFor(p.id)}/{totalTrainings} trainingen</Badge>
+                {(trainingDates.length > 0 || matchDates.length > 0) && (role !== "speler" || ownPlayerId === p.id) && (
+                  <div onClick={(e) => e.stopPropagation()} className="flex flex-wrap gap-1.5">
+                    {trainingDates.length > 0 && (() => {
+                      const t = trainingTallyFor(p.id);
+                      return (
+                        <Badge color="slate">
+                          🏃 {t.present}/{t.total} trainingen
+                          {t.unfilled > 0 && <span className="text-amber-600"> · {t.unfilled} niet ingevuld</span>}
+                        </Badge>
+                      );
+                    })()}
+                    {matchDates.length > 0 && (() => {
+                      const t = matchTallyFor(p.id);
+                      return (
+                        <Badge color="slate">
+                          ⚽ {t.present}/{t.total} wedstrijden
+                          {t.unfilled > 0 && <span className="text-amber-600"> · {t.unfilled} niet ingevuld</span>}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                 )}
 
