@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { ageFromBirthdate, formatDate, formatDateShort, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { isTrainingActivity } from "@/lib/training";
+import { injurySeverityColor, isSeriousInjury, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, SparklineColor, inputCls, thCls, tdCls } from "@/components/ui";
 import { AbsenceBanner } from "@/components/PlayerAbsence";
 import { DrawingThumbnail, TacticsBoardEditor } from "@/components/TacticsBoard";
@@ -72,6 +73,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [beFatigue, setBeFatigue] = useState("");
   const [beSoreness, setBeSoreness] = useState("");
   const [beInjury, setBeInjury] = useState(false);
+  const [beInjurySeverity, setBeInjurySeverity] = useState<NonNullable<LoadEntry["injury_severity"]>>("licht");
   const [beNotes, setBeNotes] = useState("");
   const [beBusy, setBeBusy] = useState(false);
   const [beMsg, setBeMsg] = useState<string | null>(null);
@@ -156,6 +158,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
           fatigue: beAbsent ? null : beFatigue || null,
           soreness: beAbsent ? null : beSoreness || null,
           injury_flag: beInjury,
+          injury_severity: beInjury ? beInjurySeverity : null,
           notes: beNotes,
         }),
       });
@@ -169,6 +172,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       setBeFatigue("");
       setBeSoreness("");
       setBeInjury(false);
+      setBeInjurySeverity("licht");
       setBeNotes("");
       await reload();
     } catch (e) {
@@ -343,6 +347,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
 
   const recentLoad = load.slice(0, 10);
   const injuryFlags = recentLoad.filter((l) => l.injury_flag);
+  // Alleen matig/ernstig (of onbekende ernst) telt mee als waarschuwing — een lichte
+  // klacht ("kan gewoon mee") hoeft de sparkline niet rood te kleuren.
+  const seriousInjuries = injuryFlags.filter((l) => isSeriousInjury(l));
 
   // Kleine visuele weergave (sparkline) van de belasting-trend — altijd zichtbaar
   // op het profiel, ook voor rollen die de volledige Belasting-pagina niet mogen
@@ -361,7 +368,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const latestLoad = recentLoad.find((l) => !l.absent);
   const lowRecovery = !!latestLoad && ((latestLoad.fatigue ?? 0) >= 7 || (latestLoad.soreness ?? 0) >= 7);
   const loadColor: SparklineColor =
-    injuryFlags.length > 0 || lowRecovery ? "red" : loadTrend.length > 0 ? "green" : "slate";
+    seriousInjuries.length > 0 || lowRecovery ? "red" : loadTrend.length > 0 ? "green" : "slate";
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
 
   const today = todayIso();
@@ -472,17 +479,42 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                           </label>
                         </div>
                         <label className="flex items-center gap-2 text-sm">
-                          <input type="checkbox" checked={beInjury} onChange={(e) => setBeInjury(e.target.checked)} />
+                          <input
+                            type="checkbox"
+                            checked={beInjury}
+                            onChange={(e) => {
+                              setBeInjury(e.target.checked);
+                              setBeInjurySeverity("licht");
+                            }}
+                          />
                           Ik heb ergens pijn/een blessure
                         </label>
                         {beInjury && (
-                          <textarea
-                            className={inputCls}
-                            rows={2}
-                            placeholder="Waar doet het pijn en sinds wanneer?"
-                            value={beNotes}
-                            onChange={(e) => setBeNotes(e.target.value)}
-                          />
+                          <>
+                            <div className="flex flex-wrap gap-1.5">
+                              {INJURY_SEVERITY_OPTIONS.map((o) => (
+                                <button
+                                  key={o.value}
+                                  type="button"
+                                  onClick={() => setBeInjurySeverity(o.value)}
+                                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                                    beInjurySeverity === o.value
+                                      ? "border-rose-600 bg-rose-600 text-white"
+                                      : "border-slate-300 bg-white text-slate-600"
+                                  }`}
+                                >
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              className={inputCls}
+                              rows={2}
+                              placeholder="Waar doet het pijn en sinds wanneer?"
+                              value={beNotes}
+                              onChange={(e) => setBeNotes(e.target.value)}
+                            />
+                          </>
                         )}
                       </>
                     )}
@@ -726,8 +758,11 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             {attendancePct !== null && <span className="text-slate-500"> ({attendancePct}%)</span>}
           </div>
           {injuryFlags.length > 0 && (
-            <div className="mb-3">
-              <Badge color="red">⚠ {injuryFlags.length}× blessure gemeld</Badge>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {seriousInjuries.length > 0 && <Badge color="red">⚠ {seriousInjuries.length}× blessure gemeld</Badge>}
+              {injuryFlags.length > seriousInjuries.length && (
+                <Badge color="green">🩹 {injuryFlags.length - seriousInjuries.length}× lichte klacht</Badge>
+              )}
             </div>
           )}
           {recentLoad.length === 0 ? (
@@ -738,7 +773,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                 <div key={l.id} className="border-b border-slate-100 py-1">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">{formatDate(l.date)} · {l.session_type}</span>
-                    {l.injury_flag && <Badge color="red">blessure</Badge>}
+                    {l.injury_flag && (
+                      <Badge color={injurySeverityColor(l.injury_severity)}>blessure ({l.injury_severity ?? "ernstig"})</Badge>
+                    )}
                   </div>
                   {l.absent ? (
                     <div className="text-xs text-slate-500">Afwezig</div>

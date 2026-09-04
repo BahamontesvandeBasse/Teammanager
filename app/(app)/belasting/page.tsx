@@ -8,6 +8,7 @@ import {
 import { api } from "@/lib/api";
 import { isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
+import { injurySeverityColor, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, inputCls, tdCls, thCls } from "@/components/ui";
 import { Absence, LoadEntry, Match, Player, ScheduleItem } from "@/lib/types";
 import { useCanEdit, useRole } from "@/lib/auth/RoleProvider";
@@ -17,11 +18,12 @@ type LoadDraft = {
   rpe: string;
   fatigue: string;
   injuryFlag: boolean;
+  injurySeverity: NonNullable<LoadEntry["injury_severity"]>;
   notes: string;
   absent: boolean;
 };
 
-const EMPTY_DRAFT: LoadDraft = { minutes: "", rpe: "", fatigue: "", injuryFlag: false, notes: "", absent: false };
+const EMPTY_DRAFT: LoadDraft = { minutes: "", rpe: "", fatigue: "", injuryFlag: false, injurySeverity: "licht", notes: "", absent: false };
 
 const CHART_COLORS = [
   "#059669", "#dc2626", "#2563eb", "#d97706", "#7c3aed",
@@ -147,6 +149,10 @@ export default function BelastingPage() {
           rpe: existing.rpe != null ? String(existing.rpe) : "",
           fatigue: existing.fatigue != null ? String(existing.fatigue) : "",
           injuryFlag: existing.injury_flag,
+          // Oudere rijen van vóór dit veld hebben injury_severity null — daar gaan we
+          // bij het bewerken niet stiekem van "licht" uitgaan (zie ook de advieslogica
+          // hieronder, die null net zo voorzichtig als "ernstig" behandelt).
+          injurySeverity: existing.injury_severity ?? "ernstig",
           notes: existing.notes ?? "",
           absent: existing.absent,
         };
@@ -198,7 +204,16 @@ export default function BelastingPage() {
   function toggleInjuryFlag(playerId: string) {
     setDrafts((prev) => {
       const current = prev[playerId] ?? EMPTY_DRAFT;
-      return { ...prev, [playerId]: { ...current, injuryFlag: !current.injuryFlag } };
+      // Begint elke keer weer bij "licht" — voorkomt dat een eerder ingestelde
+      // hogere ernst per ongeluk blijft staan als het vinkje uit/aan gaat.
+      return { ...prev, [playerId]: { ...current, injuryFlag: !current.injuryFlag, injurySeverity: "licht" } };
+    });
+  }
+
+  function setInjurySeverity(playerId: string, severity: LoadDraft["injurySeverity"]) {
+    setDrafts((prev) => {
+      const current = prev[playerId] ?? EMPTY_DRAFT;
+      return { ...prev, [playerId]: { ...current, injurySeverity: severity } };
     });
   }
 
@@ -224,7 +239,7 @@ export default function BelastingPage() {
 
         let base: Omit<LoadEntry, "id" | "player_id" | "reported_by">;
         if (d.absent) {
-          base = { date, session_type: sessionType, absent: true, minutes: null, rpe: null, notes: null, fatigue: null, soreness: null, injury_flag: false };
+          base = { date, session_type: sessionType, absent: true, minutes: null, rpe: null, notes: null, fatigue: null, soreness: null, injury_flag: false, injury_severity: null };
         } else {
           const minutes = parseInt(d.minutes, 10) || 0;
           const rpe = parseInt(d.rpe, 10) || 0;
@@ -234,7 +249,11 @@ export default function BelastingPage() {
           // (1 = geen vermoeidheid, 10 = veel vermoeidheid) — soreness krijgt dezelfde
           // waarde mee zodat oudere/andere plekken die nog naar soreness kijken blijven werken.
           const fatigue = fatigueRaw >= 1 && fatigueRaw <= 10 ? fatigueRaw : null;
-          base = { date, session_type: sessionType, absent: false, minutes, rpe: Math.min(10, Math.max(1, rpe)), notes: d.notes.trim() || null, fatigue, soreness: fatigue, injury_flag: d.injuryFlag };
+          base = {
+            date, session_type: sessionType, absent: false, minutes, rpe: Math.min(10, Math.max(1, rpe)),
+            notes: d.notes.trim() || null, fatigue, soreness: fatigue,
+            injury_flag: d.injuryFlag, injury_severity: d.injuryFlag ? d.injurySeverity : null,
+          };
         }
 
         if (existing) {
@@ -329,15 +348,22 @@ export default function BelastingPage() {
         const lowRecovery = !!latest?.fatigue && latest.fatigue >= 7;
 
         const absenceStatus = playerAbsenceStatus(p.id, absences, today);
+        // "licht" (kan gewoon mee spelen/trainen) mag het advies niet overrulen — anders
+        // wordt elk klein pijntje behandeld als serieuze blessure. Onbekende ernst (oudere
+        // rijen van vóór dit veld) blijft voorzichtigheidshalve "ernstig".
+        const injurySeverity = latest?.injury_flag ? latest.injury_severity ?? "ernstig" : null;
 
         let risk: "red" | "amber" | "green" | "slate" = "slate";
         let advice = "❔ Nog geen data";
         if (absenceStatus?.kind === "current") {
           risk = "red";
           advice = `🚫 Niet inzetbaar${absenceStatus.absence.reason ? ` — ${absenceStatus.absence.reason}` : " — afwezig"}`;
-        } else if (latest?.injury_flag) {
+        } else if (injurySeverity === "ernstig") {
           risk = "red";
           advice = "🚑 Rustig aan — blessure gemeld";
+        } else if (injurySeverity === "matig") {
+          risk = "amber";
+          advice = "🩹 Aangepast programma — matige blessure gemeld";
         } else if (thisWeek === 0 && prevWeek === 0) {
           risk = "slate";
           advice = "❔ Nog geen data";
@@ -356,6 +382,11 @@ export default function BelastingPage() {
         } else {
           risk = "green";
           advice = "✅ Normale intensiteit";
+        }
+
+        // Lichte klacht: geen impact op het advies zelf, maar wel zichtbaar als notitie.
+        if (injurySeverity === "licht" && risk !== "red") {
+          advice = `${advice} · 🩹 lichte klacht gemeld`;
         }
 
         return { player: p, change, risk, advice, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
@@ -593,16 +624,27 @@ export default function BelastingPage() {
                         disabled={d.absent} onChange={(e) => setDraft(p.id, "fatigue", e.target.value)} />
                     </td>
                     <td className={tdCls}>
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <input type="checkbox" checked={d.injuryFlag} disabled={d.absent} onChange={() => toggleInjuryFlag(p.id)} />
                         {d.injuryFlag && (
-                          <input
-                            type="text"
-                            className={`${inputCls} w-32`}
-                            placeholder="Toelichting"
-                            value={d.notes}
-                            onChange={(e) => setDraft(p.id, "notes", e.target.value)}
-                          />
+                          <>
+                            <select
+                              className={`${inputCls} w-36`}
+                              value={d.injurySeverity}
+                              onChange={(e) => setInjurySeverity(p.id, e.target.value as LoadDraft["injurySeverity"])}
+                            >
+                              {INJURY_SEVERITY_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              className={`${inputCls} w-32`}
+                              placeholder="Toelichting"
+                              value={d.notes}
+                              onChange={(e) => setDraft(p.id, "notes", e.target.value)}
+                            />
+                          </>
                         )}
                       </div>
                     </td>
@@ -783,8 +825,10 @@ export default function BelastingPage() {
                             <td className={tdCls}>
                               {e.injury_flag ? (
                                 <div>
-                                  <Badge color="red">⚠️</Badge>
-                                  {e.notes && <div className="mt-1 max-w-[200px] text-xs text-red-700">{e.notes}</div>}
+                                  <Badge color={injurySeverityColor(e.injury_severity)}>
+                                    ⚠️ {e.injury_severity ?? "ernstig"}
+                                  </Badge>
+                                  {e.notes && <div className="mt-1 max-w-[200px] text-xs text-slate-600">{e.notes}</div>}
                                 </div>
                               ) : (
                                 "—"

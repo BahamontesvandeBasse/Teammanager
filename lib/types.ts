@@ -90,6 +90,11 @@ export type LoadEntry = {
   fatigue: number | null; // 1-10, vermoeidheid (zelfde schaal als RPE)
   soreness: number | null; // 1-10, spierpijn (zelfde schaal als RPE)
   injury_flag: boolean;
+  // Ernst van de gemelde blessure/klacht — bepaalt hoe zwaar dit meeweegt in het
+  // trainingsadvies: "licht" (kan gewoon mee spelen/trainen) overrules het advies
+  // niet, "matig"/"ernstig" wel. Null bij oudere rijen van vóór dit veld (dan
+  // behandelen we 'm voorzichtigheidshalve als "ernstig", zie lib/loadAdvice.ts).
+  injury_severity: "licht" | "matig" | "ernstig" | null;
   reported_by: "staff" | "player";
 };
 

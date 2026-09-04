@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { formatDate, formatDateShort } from "@/lib/format";
 import { computeMatchTimes } from "@/lib/schedule";
+import { injurySeverityColor } from "@/lib/loadAdvice";
 import { FORMATION_PRESETS, FormationSlot, isGuestId, layoutForFormation, resolveSlotPlayer } from "@/lib/formations";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { DrawingThumbnail, TacticsBoardModal } from "@/components/TacticsBoard";
@@ -1206,7 +1207,15 @@ function WedstrijdenPageInner() {
                                 <td className={tdCls}>{e.rpe}</td>
                                 <td className={`${tdCls} font-medium`}>{(e.minutes ?? 0) * (e.rpe ?? 0)}</td>
                                 <td className={tdCls}>{e.fatigue ? `${e.fatigue}/10` : "—"}</td>
-                                <td className={tdCls}>{e.injury_flag ? <Badge color="red">⚠️</Badge> : "—"}</td>
+                                <td className={tdCls}>
+                                  {e.injury_flag ? (
+                                    <Badge color={injurySeverityColor(e.injury_severity)}>
+                                      ⚠️{e.injury_severity ? ` ${e.injury_severity}` : ""}
+                                    </Badge>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
                               </>
                             )}
                           </tr>

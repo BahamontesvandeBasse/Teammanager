@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { date, session_type, absent, minutes, rpe, fatigue, soreness, injury_flag, notes } = body;
+    const { date, session_type, absent, minutes, rpe, fatigue, soreness, injury_flag, injury_severity, notes } = body;
 
     if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ error: "Ongeldige datum." }, { status: 400 });
@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
     if (session_type !== "training" && session_type !== "wedstrijd") {
       return NextResponse.json({ error: "Onbekend type sessie." }, { status: 400 });
     }
+    const validSeverities = ["licht", "matig", "ernstig"];
+    if (injury_severity !== null && injury_severity !== undefined && !validSeverities.includes(injury_severity)) {
+      return NextResponse.json({ error: "Ongeldige ernst voor de blessure." }, { status: 400 });
+    }
+    // Aangevinkt zonder ernst-keuze → voorzichtigheidshalve "ernstig" behandelen i.p.v. aannemen dat het licht is.
+    const severity = injury_flag === true ? injury_severity ?? "ernstig" : null;
 
     const store = getStore();
     const existing = (await store.list("load_entries")) as unknown as LoadEntry[];
@@ -59,6 +65,7 @@ export async function POST(req: NextRequest) {
           fatigue: null,
           soreness: null,
           injury_flag: false,
+          injury_severity: null,
           reported_by: "player",
         },
       ]);
@@ -94,6 +101,7 @@ export async function POST(req: NextRequest) {
         fatigue: fatigueNum,
         soreness: sorenessNum,
         injury_flag: injury_flag === true,
+        injury_severity: severity,
         reported_by: "player",
       },
     ]);
