@@ -78,6 +78,20 @@ export type MatchStat = {
   rating: number | null; // beoordeling van de staf, 1-10
 };
 
+// Zelfreflectie van een speler op een gespeelde wedstrijd — alleen zichtbaar
+// voor de speler zelf en de staf (zie lib/auth/access.ts redactForRole), nooit
+// voor teamgenoten of toeschouwers.
+export type MatchReflection = {
+  id: string;
+  match_id: string;
+  player_id: string;
+  positive: string | null; // wat ging er goed volgens de speler zelf
+  negative: string | null; // wat kan er beter volgens de speler zelf
+  self_rating: number | null; // eigen beoordeling, 1-10
+  created_at: string;
+  updated_at: string;
+};
+
 export type LoadEntry = {
   id: string;
   player_id: string;
@@ -356,6 +370,7 @@ export type EntityMap = {
   warmups: WarmingUp;
   exercises: Exercise;
   set_pieces: SetPiece;
+  match_reflections: MatchReflection;
 };
 
 export type EntityName = keyof EntityMap;
@@ -381,6 +396,7 @@ export const ENTITIES: EntityName[] = [
   "warmups",
   "exercises",
   "set_pieces",
+  "match_reflections",
 ];
 
 export const TEAM_NAME = "Sv Steenwijkerwold JO19-1";

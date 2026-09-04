@@ -16,6 +16,7 @@ import {
   DrawingElement,
   LoadEntry,
   Match,
+  MatchReflection,
   MatchStat,
   Player,
   ScheduleItem,
@@ -34,6 +35,10 @@ function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function isPlayed(m: Match): boolean {
+  return m.score_for !== null && m.score_against !== null;
 }
 
 function addDaysIso(iso: string, days: number): string {
@@ -61,6 +66,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [ownSetPieces, setOwnSetPieces] = useState<SetPiece[]>([]);
+  const [ownReflections, setOwnReflections] = useState<MatchReflection[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -94,6 +100,13 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const [spBusy, setSpBusy] = useState(false);
   const [spMsg, setSpMsg] = useState<string | null>(null);
 
+  const [mrSelectedMatch, setMrSelectedMatch] = useState("");
+  const [mrPositive, setMrPositive] = useState("");
+  const [mrNegative, setMrNegative] = useState("");
+  const [mrSelfRating, setMrSelfRating] = useState("");
+  const [mrBusy, setMrBusy] = useState(false);
+  const [mrMsg, setMrMsg] = useState<string | null>(null);
+
   const reload = () =>
     Promise.all([
       api.list("players"),
@@ -105,8 +118,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       api.list("absences"),
       api.list("schedule_items"),
       api.list("set_pieces"),
+      api.list("match_reflections"),
     ])
-      .then(([players, m, s, l, vl, vn, a, si, setPieces]) => {
+      .then(([players, m, s, l, vl, vn, a, si, setPieces, reflections]) => {
         const found = players.find((p) => p.id === id) ?? null;
         if (!found) {
           setNotFound(true);
@@ -125,6 +139,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             .filter((x) => x.suggested_by_player_id === id)
             .sort((a, b) => b.created_at.localeCompare(a.created_at))
         );
+        setOwnReflections(reflections.filter((x) => x.player_id === id));
       })
       .finally(() => setLoading(false));
 
@@ -207,6 +222,41 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
       setAfMsg((e as Error).message);
     } finally {
       setAfBusy(false);
+    }
+  }
+
+  function openReflection(matchId: string) {
+    setMrSelectedMatch(matchId);
+    const existing = ownReflections.find((r) => r.match_id === matchId);
+    setMrPositive(existing?.positive ?? "");
+    setMrNegative(existing?.negative ?? "");
+    setMrSelfRating(existing?.self_rating ? String(existing.self_rating) : "");
+    setMrMsg(null);
+  }
+
+  async function submitReflection() {
+    if (!mrSelectedMatch) return;
+    setMrBusy(true);
+    setMrMsg(null);
+    try {
+      const res = await fetch("/api/match-reflections/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id: mrSelectedMatch,
+          positive: mrPositive,
+          negative: mrNegative,
+          self_rating: mrSelfRating || null,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Opslaan mislukt");
+      setMrMsg("Analyse opgeslagen.");
+      await reload();
+    } catch (e) {
+      setMrMsg((e as Error).message);
+    } finally {
+      setMrBusy(false);
     }
   }
 
@@ -313,6 +363,13 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
     .sort((a, b) => a.from.localeCompare(b.from));
   const absenceMinFrom = addDaysIso(selfToday, ABSENCE_MIN_DAYS_NOTICE);
 
+  // ---------- Zelfbediening: wedstrijdanalyse ----------
+  const reflectionByMatch = new Map(ownReflections.map((r) => [r.match_id, r]));
+  const playedMatchesForReflection = [...matches]
+    .filter(isPlayed)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const selectedReflectionMatch = playedMatchesForReflection.find((m) => m.id === mrSelectedMatch) ?? null;
+
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const totals = stats.reduce(
     (t, s) => ({
@@ -412,18 +469,39 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
               even voor je verstuurt, daarna kun je het niet meer aanpassen (vraag dan de staf).
             </p>
             {selfSessionOptions.length === 0 ? (
-              <p className="text-sm text-slate-500">Geen recente trainingen of wedstrijden meer om in te vullen.</p>
+              <p className="text-sm text-slate-500">
+                {beMsg ? "Alles ingevuld — goed bezig! 💪" : "Geen recente trainingen of wedstrijden meer om in te vullen."}
+              </p>
             ) : (
               <div className="flex flex-col gap-3">
-                <select className={inputCls} value={beSelectedSession} onChange={(e) => setBeSelectedSession(e.target.value)}>
-                  <option value="">— Kies een training of wedstrijd —</option>
-                  {selfSessionOptions.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                {!selectedSelfSession && (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {selfSessionOptions.map((o) => (
+                      <button
+                        key={o.value}
+                        onClick={() => setBeSelectedSession(o.value)}
+                        className="flex flex-col items-start gap-0.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left hover:border-amber-400 hover:bg-amber-100"
+                      >
+                        <span className="text-xs font-medium text-amber-700">
+                          {o.sessionType === "training" ? "🏃 Training" : "🏆 Wedstrijd"}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-800">{formatDateShort(o.date)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {selectedSelfSession && (
                   <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-800">{selectedSelfSession.label}</span>
+                      <button
+                        onClick={() => setBeSelectedSession("")}
+                        className="text-xs text-slate-500 hover:underline"
+                      >
+                        ← andere sessie kiezen
+                      </button>
+                    </div>
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={beAbsent} onChange={(e) => setBeAbsent(e.target.checked)} />
                       Ik was hier niet bij
@@ -528,6 +606,97 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                   </>
                 )}
                 {beMsg && <div className="text-xs text-slate-600">{beMsg}</div>}
+              </div>
+            )}
+          </Card>
+
+          <Card className="mb-6">
+            <h2 className="mb-1 font-semibold">Wedstrijdanalyse 📊</h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Kijk terug op een gespeelde wedstrijd: wat ging goed, wat kan beter, en welk cijfer geef je jezelf? Alleen jij en de
+              staf kunnen dit zien — je kunt het later altijd nog aanpassen.
+            </p>
+            {playedMatchesForReflection.length === 0 ? (
+              <p className="text-sm text-slate-500">Nog geen gespeelde wedstrijden om te analyseren.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {!selectedReflectionMatch && (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {playedMatchesForReflection.map((m) => {
+                      const existing = reflectionByMatch.get(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => openReflection(m.id)}
+                          className={`flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left ${
+                            existing
+                              ? "border-green-300 bg-green-50 hover:border-green-400 hover:bg-green-100"
+                              : "border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100"
+                          }`}
+                        >
+                          <span className={`text-xs font-medium ${existing ? "text-green-700" : "text-amber-700"}`}>
+                            {existing ? "✓ Ingevuld" : "Nog invullen"}
+                          </span>
+                          <span className="text-sm font-semibold text-slate-800">{formatDateShort(m.date)}</span>
+                          <span className="text-xs text-slate-500">
+                            {m.home_away === "away" ? `${m.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${m.opponent}`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {selectedReflectionMatch && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-slate-800">
+                        {formatDateShort(selectedReflectionMatch.date)} —{" "}
+                        {selectedReflectionMatch.home_away === "away"
+                          ? `${selectedReflectionMatch.opponent} — Steenwijkerwold`
+                          : `Steenwijkerwold — ${selectedReflectionMatch.opponent}`}
+                      </span>
+                      <button onClick={() => setMrSelectedMatch("")} className="text-xs text-slate-500 hover:underline">
+                        ← andere wedstrijd kiezen
+                      </button>
+                    </div>
+
+                    <label className="text-sm">
+                      <span className="mb-1 block text-xs text-slate-500">Positief punt uit deze wedstrijd</span>
+                      <textarea
+                        className={inputCls}
+                        rows={2}
+                        value={mrPositive}
+                        onChange={(e) => setMrPositive(e.target.value)}
+                      />
+                    </label>
+                    <label className="text-sm">
+                      <span className="mb-1 block text-xs text-slate-500">Negatief punt uit deze wedstrijd</span>
+                      <textarea
+                        className={inputCls}
+                        rows={2}
+                        value={mrNegative}
+                        onChange={(e) => setMrNegative(e.target.value)}
+                      />
+                    </label>
+                    <label className="text-sm">
+                      <span className="mb-1 block text-xs text-slate-500">Ik beoordeel mijzelf met een (1-10, optioneel)</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        className={`${inputCls} w-24`}
+                        value={mrSelfRating}
+                        onChange={(e) => setMrSelfRating(e.target.value)}
+                      />
+                    </label>
+
+                    <Button onClick={submitReflection} disabled={mrBusy || (!mrPositive.trim() && !mrNegative.trim() && !mrSelfRating)}>
+                      {mrBusy ? "Bezig…" : "Opslaan"}
+                    </Button>
+                  </>
+                )}
+                {mrMsg && <div className="text-xs text-slate-600">{mrMsg}</div>}
               </div>
             )}
           </Card>

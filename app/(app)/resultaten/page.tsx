@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { formatDate, formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
-import { Absence, Match, MatchStat, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
+import { Absence, Match, MatchReflection, MatchStat, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type StatDraft = Partial<{ goals: string; assists: string; minutes: string; rating: string }>;
@@ -58,6 +58,7 @@ function ResultatenPageInner() {
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [reflections, setReflections] = useState<MatchReflection[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedMatch, setSelectedMatch] = useState<string>("");
@@ -84,8 +85,9 @@ function ResultatenPageInner() {
       api.list("video_notes"),
       api.list("schedule_items"),
       api.list("absences"),
+      api.list("match_reflections"),
     ])
-      .then(([p, m, s, v, n, si, a]) => {
+      .then(([p, m, s, v, n, si, a, r]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setMatches([...m].sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`)));
         setStats(s);
@@ -93,6 +95,7 @@ function ResultatenPageInner() {
         setVideoNotes(n);
         setScheduleItems(si);
         setAbsences(a);
+        setReflections(r);
       })
       .finally(() => setLoading(false));
 
@@ -228,6 +231,15 @@ function ResultatenPageInner() {
   }, [playedMatches]);
 
   // ---------- Analyses ----------
+
+  // Zelfreflecties van spelers op de geselecteerde wedstrijd — alleen voor staf zichtbaar
+  // (de API redigeert dit sowieso al tot "eigen rijen" voor niet-staf, maar de kaart zelf
+  // is bovendien canEdit-gated zodat een toeschouwer/speler 'm hier niet eens te zien krijgt).
+  const selectedReflections = reflections
+    .filter((r) => r.match_id === selectedMatch)
+    .map((r) => ({ reflection: r, player: players.find((p) => p.id === r.player_id) }))
+    .filter((r): r is { reflection: MatchReflection; player: Player } => !!r.player)
+    .sort((a, b) => a.player.name.localeCompare(b.player.name, "nl"));
 
   const matchVideos = videoLinks.filter((v) => v.match_id === selectedMatch);
   const currentVideo = videoLinks.find((v) => v.id === selectedVideo) ?? null;
@@ -582,6 +594,41 @@ function ResultatenPageInner() {
             </div>
             </fieldset>
           </Card>
+
+          {canEdit && (
+            <Card className="mb-6">
+              <h2 className="mb-1 font-semibold">Zelfreflecties spelers 📊</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Wat spelers zelf invullen op hun profiel na deze wedstrijd — alleen voor jou en de betreffende speler zichtbaar.
+              </p>
+              {selectedReflections.length === 0 ? (
+                <p className="text-sm text-slate-500">Nog geen speler heeft deze wedstrijd geanalyseerd.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {selectedReflections.map(({ reflection, player }) => (
+                    <div key={reflection.id} className="rounded-lg border border-slate-200 p-3">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="font-medium text-slate-800">{player.name}</span>
+                        {reflection.self_rating && <Badge color="slate">{reflection.self_rating}/10</Badge>}
+                      </div>
+                      {reflection.positive && (
+                        <p className="text-sm text-slate-700">
+                          <span className="font-medium text-green-700">+ </span>
+                          {reflection.positive}
+                        </p>
+                      )}
+                      {reflection.negative && (
+                        <p className="text-sm text-slate-700">
+                          <span className="font-medium text-red-700">− </span>
+                          {reflection.negative}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
 
           <Card className="mb-6">
             <h2 className="mb-3 font-semibold">Teamstatistieken</h2>

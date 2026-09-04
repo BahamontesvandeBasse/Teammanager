@@ -1,14 +1,15 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { ParsedMatch } from "@/lib/parse";
 import { formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { AbsenceTimeline } from "@/components/AbsenceTimeline";
-import { Absence, Club, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
+import { Absence, Club, LoadEntry, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
+import { isTrainingActivity } from "@/lib/training";
 
 type AgendaRow =
   | { kind: "schedule"; date: string; item: ScheduleItem }
@@ -76,6 +77,8 @@ export default function ProgrammaPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
+  const [attendanceOpenKey, setAttendanceOpenKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
@@ -120,14 +123,16 @@ export default function ProgrammaPage() {
       api.list("players"),
       api.list("staff"),
       api.list("absences"),
+      api.list("load_entries"),
     ])
-      .then(([m, c, si, p, s, a]) => {
+      .then(([m, c, si, p, s, a, le]) => {
         setMatches(sortMatches(m));
         setClubs(c);
         setScheduleItems(si);
         setPlayers([...p].sort((x, y) => x.name.localeCompare(y.name, "nl")));
         setStaff([...s].sort((x, y) => x.name.localeCompare(y.name, "nl")));
         setAbsences(a);
+        setLoadEntries(le);
       })
       .finally(() => setLoading(false));
 
@@ -364,6 +369,63 @@ export default function ProgrammaPage() {
       });
   }
 
+  // ---------- Snel aan-/afwezigheid per training/wedstrijd ----------
+  // Voor last-minute wijzigingen (iemand belt dat hij/zij toch kan komen, of
+  // meldt zich ziek vlak van tevoren) hoeft de staf niet de volledige
+  // belasting-invoer (RPE, minuten) te doorlopen — een losse load_entries-rij
+  // met alleen `absent` volstaat, tallyAttendance elders leest die net zo
+  // goed. Een reeds bestaande rij mét ingevulde belasting wordt nooit
+  // stilzwijgend verwijderd, om te voorkomen dat een sneltoets die data wist.
+  function sessionTypeForRow(row: AgendaRow): "training" | "wedstrijd" | null {
+    if (row.kind === "match") return "wedstrijd";
+    if (isTrainingActivity(row.item.activity)) return "training";
+    return null;
+  }
+
+  function attendanceKey(date: string, sessionType: "training" | "wedstrijd") {
+    return `${sessionType}|${date}`;
+  }
+
+  const activePlayers = players.filter((p) => p.active);
+
+  async function cycleAttendance(
+    playerId: string,
+    date: string,
+    sessionType: "training" | "wedstrijd",
+    entry: LoadEntry | undefined
+  ) {
+    try {
+      if (!entry) {
+        await api.create("load_entries", {
+          player_id: playerId,
+          date,
+          session_type: sessionType,
+          absent: false,
+          minutes: null,
+          rpe: null,
+          notes: null,
+          fatigue: null,
+          soreness: null,
+          injury_flag: false,
+          injury_severity: null,
+          reported_by: "staff",
+        });
+      } else if (!entry.absent) {
+        await api.update("load_entries", entry.id, { absent: true });
+      } else {
+        const hasData = entry.minutes != null || entry.rpe != null || !!entry.notes?.trim() || entry.injury_flag;
+        if (hasData) {
+          await api.update("load_entries", entry.id, { absent: false });
+        } else {
+          await api.remove("load_entries", entry.id);
+        }
+      }
+      await reload();
+    } catch (e) {
+      flash((e as Error).message, true);
+    }
+  }
+
   async function addItem() {
     if (!newItemDate || !newActivity.trim()) {
       flash("Vul een datum en activiteit in.", true);
@@ -475,6 +537,72 @@ export default function ProgrammaPage() {
     .sort((a, b) => a.from.localeCompare(b.from));
   const { upcoming: upcomingAgenda, past: pastAgenda } = splitByDate(filteredAgendaRows, (r) => r.date, today);
 
+  function attendanceToggleButton(sessionType: "training" | "wedstrijd", date: string) {
+    if (!canEdit) return null;
+    const key = attendanceKey(date, sessionType);
+    const open = attendanceOpenKey === key;
+    return (
+      <button
+        className="text-left text-xs font-medium text-slate-500 hover:underline"
+        onClick={() => setAttendanceOpenKey(open ? null : key)}
+      >
+        {open ? "sluiten" : "👥 aanwezigheid"}
+      </button>
+    );
+  }
+
+  function attendancePanelRow(sessionType: "training" | "wedstrijd", date: string, colSpan: number) {
+    const key = attendanceKey(date, sessionType);
+    if (attendanceOpenKey !== key) return null;
+    return (
+      <tr className="border-b border-slate-100 bg-slate-50/60">
+        <td colSpan={colSpan} className="px-4 py-3">
+          <div className="flex flex-wrap gap-1.5">
+            {activePlayers.map((p) => {
+              const entry = loadEntries.find(
+                (e) => e.player_id === p.id && e.date === date && e.session_type === sessionType
+              );
+              const periodAbsent = absences.some((a) => a.player_id === p.id && date >= a.from && date <= a.until);
+              const status: "present" | "absent" | "period-absent" | "unfilled" = entry
+                ? entry.absent
+                  ? "absent"
+                  : "present"
+                : periodAbsent
+                ? "period-absent"
+                : "unfilled";
+              const styles: Record<typeof status, string> = {
+                present: "border-emerald-600 bg-emerald-600 text-white",
+                absent: "border-red-500 bg-red-500 text-white",
+                "period-absent": "border-amber-400 bg-amber-50 text-amber-700",
+                unfilled: "border-slate-300 bg-white text-slate-600",
+              };
+              const title = {
+                present: "Aanwezig — klik voor afwezig",
+                absent: "Afwezig — klik om te wissen",
+                "period-absent": "Afwezig (periode) — klik om aanwezig te markeren",
+                unfilled: "Onbekend — klik om aanwezig te markeren",
+              }[status];
+              return (
+                <button
+                  key={p.id}
+                  title={title}
+                  onClick={() => cycleAttendance(p.id, date, sessionType, entry)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${styles[status]}`}
+                >
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Klik op een naam om de aanwezigheid voor deze sessie te overschrijven. Groen = aanwezig, rood = afwezig,
+            amber = afwezig door een lopende periode, grijs = onbekend.
+          </p>
+        </td>
+      </tr>
+    );
+  }
+
   function agendaRow(row: AgendaRow, showResult: boolean) {
     const absentNames = absentNamesForDate(row.date);
     const afwezigCell =
@@ -483,13 +611,16 @@ export default function ProgrammaPage() {
       ) : (
         <span className="text-xs text-amber-700">{absentNames.join(", ")}</span>
       );
+    const sessionType = sessionTypeForRow(row);
+    const colSpan = showResult ? 7 : 6;
 
     if (row.kind === "match") {
       const { match } = row;
       const played = match.date <= today;
       const activity = `Wedstrijd ${match.opponent} (${match.home_away === "home" ? "thuis" : "uit"})`;
       return (
-        <tr key={`match-${match.id}`} className="border-b border-slate-100 bg-blue-50/30">
+        <Fragment key={`match-${match.id}`}>
+        <tr className="border-b border-slate-100 bg-blue-50/30">
           <td className={tdCls}>{formatDateShort(match.date)}</td>
           <td className={tdCls}>
             <Badge color="blue">{activity}</Badge>
@@ -543,6 +674,7 @@ export default function ProgrammaPage() {
                   🎥 Analyse →
                 </Link>
               )}
+              {sessionType && attendanceToggleButton(sessionType, row.date)}
               {canEdit && (
                 <button className="text-left text-xs text-red-500 hover:underline" onClick={() => removeMatch(match)}>
                   verwijderen
@@ -551,13 +683,16 @@ export default function ProgrammaPage() {
             </div>
           </td>
         </tr>
+        {sessionType && attendancePanelRow(sessionType, row.date, colSpan)}
+        </Fragment>
       );
     }
 
     const item = row.item;
     const activityLabel = item.home_away ? `${item.activity} (${item.home_away === "home" ? "thuis" : "uit"})` : item.activity;
     return (
-      <tr key={`item-${item.id}`} className="border-b border-slate-100">
+      <Fragment key={`item-${item.id}`}>
+      <tr className="border-b border-slate-100">
         <td className={tdCls}>{formatDateShort(item.date)}</td>
         <td className={tdCls}>
           <Badge color={activityColor(item.activity)}>{activityLabel}</Badge>
@@ -598,13 +733,18 @@ export default function ProgrammaPage() {
           )}
         </td>
         <td className={tdCls}>
-          {canEdit && (
-            <button className="text-xs text-red-500 hover:underline" onClick={() => removeItem(item)}>
-              verwijderen
-            </button>
-          )}
+          <div className="flex flex-col gap-0.5">
+            {sessionType && attendanceToggleButton(sessionType, row.date)}
+            {canEdit && (
+              <button className="text-left text-xs text-red-500 hover:underline" onClick={() => removeItem(item)}>
+                verwijderen
+              </button>
+            )}
+          </div>
         </td>
       </tr>
+      {sessionType && attendancePanelRow(sessionType, row.date, colSpan)}
+      </Fragment>
     );
   }
 

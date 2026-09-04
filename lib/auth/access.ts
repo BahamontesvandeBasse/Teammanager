@@ -88,6 +88,14 @@ export async function redactForRole(entity: EntityName, rows: Row[], role: Role)
     }));
   }
 
+  // Wedstrijdzelfreflecties: alleen de eigen speler en de staf zien deze —
+  // toeschouwers zien er niets van, teamgenoten evenmin.
+  if (entity === "match_reflections") {
+    if (role === "toeschouwer") return [];
+    const ownPlayerId = await getSessionPlayerId();
+    return rows.filter((r) => r.player_id === ownPlayerId);
+  }
+
   if (role !== "speler") return rows;
 
   if (entity === "match_preparations") {

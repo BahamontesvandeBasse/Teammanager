@@ -185,7 +185,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
           <h1 className="text-3xl font-extrabold leading-tight print:text-4xl">{matchLabel}</h1>
           <Badge>{isAway ? "UITWEDSTRIJD" : "THUISWEDSTRIJD"}</Badge>
         </div>
-        <p className="mt-1 text-base font-medium text-rose-50 print:text-lg">
+        <p className="mt-1 text-base font-medium text-rose-50 print:text-xl">
           {formatDate(match.date)} · aftrap {match.kickoff_time}
           {match.competition ? ` · ${match.competition}` : ""}
         </p>
@@ -204,39 +204,39 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
               <div className="shrink-0 w-[300px] print:w-[400px]">
                 {slots.length > 0 && (
                   <div>
-                    <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">
+                    <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-xl">
                       Opstelling
                     </h2>
                     {(substituteNames.length > 0 || absentInLineup.length > 0 || absentSquadNames.length > 0) && (
                       <div className="mb-3 flex flex-col gap-2 rounded-lg border border-slate-200 p-3 print:border-slate-300 print:p-4">
                         {absentInLineup.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-bold uppercase tracking-wide text-red-600 print:text-sm">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-red-600 print:text-base">
                               ⚠️ Afwezig in opstelling
                             </h3>
-                            <p className="text-sm font-medium text-red-700 print:text-base">
+                            <p className="text-sm font-medium text-red-700 print:text-lg">
                               {absentInLineup.join(", ")} {absentInLineup.length === 1 ? "staat" : "staan"} in de opstelling maar {absentInLineup.length === 1 ? "is" : "zijn"} afwezig gemeld!
                             </p>
                           </div>
                         )}
                         {absentSquadNames.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-bold uppercase tracking-wide text-amber-700 print:text-sm">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-amber-700 print:text-base">
                               Afwezig
                             </h3>
-                            <p className="text-sm font-medium text-slate-800 print:text-base">{absentSquadNames.join(", ")}</p>
+                            <p className="text-sm font-medium text-slate-800 print:text-lg">{absentSquadNames.join(", ")}</p>
                           </div>
                         )}
                         {substituteNames.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 print:text-sm">Wissels</h3>
-                            <p className="text-sm font-medium text-slate-800 print:text-base">{substituteNames.join(" · ")}</p>
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500 print:text-base">Wissels</h3>
+                            <p className="text-sm font-medium text-slate-800 print:text-lg">{substituteNames.join(" · ")}</p>
                           </div>
                         )}
                       </div>
                     )}
                     {prep.formation && (
-                      <p className="mb-2 text-center text-lg font-bold text-slate-800 print:text-xl">{prep.formation}</p>
+                      <p className="mb-2 text-center text-lg font-bold text-slate-800 print:text-2xl">{prep.formation}</p>
                     )}
                     <div
                       className="print-color-exact relative mx-auto w-full overflow-hidden rounded-xl border-2 border-white/80"
@@ -256,7 +256,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                             className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
                           >
                             <span
-                              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold text-white print:h-14 print:w-14 print:text-lg ${
+                              className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-bold text-white print:h-16 print:w-16 print:text-xl ${
                                 isAbsent
                                   ? "border-red-400 bg-red-600"
                                   : player
@@ -268,7 +268,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                             >
                               {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
                             </span>
-                            <span className="max-w-[75px] truncate rounded bg-black/50 px-1 text-[9px] leading-tight text-white print:max-w-[100px] print:text-sm">
+                            <span className="max-w-[75px] truncate rounded bg-black/50 px-1 text-[9px] leading-tight text-white print:max-w-[110px] print:text-base">
                               {player?.name.split(" ")[0] ?? ""}
                             </span>
                           </div>
@@ -276,7 +276,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                       })}
                     </div>
                     {Object.keys(guestNames).length > 0 && (
-                      <p className="mt-2 text-center text-xs text-purple-700 print:text-sm">
+                      <p className="mt-2 text-center text-xs text-purple-700 print:text-base">
                         G = gastspeler: {Object.values(guestNames).join(", ")}
                       </p>
                     )}
@@ -286,25 +286,25 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
 
               {/* Rechts: team-tactiek — twee groepen, elk met eigen (grotere) tekening onder de tekst. */}
               <div>
-                <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">
+                <h2 className="mb-3 text-center text-base font-bold uppercase tracking-wide text-rose-700 print:text-xl">
                   Team-tactiek
                 </h2>
                 <div className="flex flex-col gap-4 sm:flex-row print:flex-row print:gap-6">
                   {teamTactics.map(({ group, moments, drawing }) => (
                     <div key={group.key} className="w-[320px] rounded-lg border border-slate-200 p-4 print:w-[380px] print:border-slate-300">
-                      <h3 className="mb-2 text-center text-sm font-bold uppercase tracking-wide text-slate-500 print:text-base">
+                      <h3 className="mb-2 text-center text-sm font-bold uppercase tracking-wide text-slate-500 print:text-lg">
                         {group.title}
                       </h3>
                       {moments.length === 0 ? (
-                        <p className="text-sm text-slate-400 print:text-base">Niet ingevuld.</p>
+                        <p className="text-sm text-slate-400 print:text-lg">Niet ingevuld.</p>
                       ) : (
                         <div className="flex flex-col gap-2">
                           {moments.map((m) => (
                             <div key={m.key}>
-                              <div className="text-xs font-semibold text-slate-500 print:text-sm">
+                              <div className="text-xs font-semibold text-slate-500 print:text-base">
                                 {m.icon} {m.label}
                               </div>
-                              <div className="text-sm font-medium text-slate-900 print:text-base">
+                              <div className="text-sm font-medium text-slate-900 print:text-lg">
                                 {prep.tactical_notes!.team[m.key]}
                               </div>
                             </div>
@@ -331,15 +331,15 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:h-full print:grid-cols-2 print:grid-rows-2 print:gap-4">
               {lineTactics.map(({ line, moments, drawing }) => (
                 <div key={line.key} className="flex flex-col rounded-xl border border-slate-200 p-4 print:border-slate-300 print:p-4">
-                  <h2 className="mb-2 text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">{line.label}</h2>
+                  <h2 className="mb-2 text-base font-bold uppercase tracking-wide text-rose-700 print:text-xl">{line.label}</h2>
                   {moments.length === 0 ? (
-                    <p className="text-sm text-slate-400 print:text-base">Niet ingevuld.</p>
+                    <p className="text-sm text-slate-400 print:text-lg">Niet ingevuld.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       {moments.map((m) => (
                         <div key={m.key}>
-                          <div className="text-xs font-semibold text-slate-500 print:text-sm">{m.icon} {m.label}</div>
-                          <div className="text-sm font-medium text-slate-900 print:text-base">
+                          <div className="text-xs font-semibold text-slate-500 print:text-base">{m.icon} {m.label}</div>
+                          <div className="text-sm font-medium text-slate-900 print:text-lg">
                             {prep.tactical_notes!.line[line.key][m.key]}
                           </div>
                         </div>
@@ -355,9 +355,9 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
               ))}
 
               <div className="flex flex-col rounded-xl border border-slate-200 p-4 print:border-slate-300 print:p-4">
-                <h2 className="mb-2 text-base font-bold uppercase tracking-wide text-rose-700 print:text-lg">Standaardsituaties</h2>
+                <h2 className="mb-2 text-base font-bold uppercase tracking-wide text-rose-700 print:text-xl">Standaardsituaties</h2>
                 {chosenSetPieces.length === 0 ? (
-                  <p className="text-sm text-slate-400 print:text-base">Geen standaardsituaties gekozen.</p>
+                  <p className="text-sm text-slate-400 print:text-lg">Geen standaardsituaties gekozen.</p>
                 ) : (
                   <div className="flex flex-col gap-2.5 overflow-y-auto">
                     {SET_PIECE_CATEGORIES.map((cat) => {
@@ -365,14 +365,14 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                       if (inCategory.length === 0) return null;
                       return (
                         <div key={cat}>
-                          <h3 className="mb-1 text-xs font-bold text-slate-600 print:text-sm">{SET_PIECE_CATEGORY_LABELS[cat]}</h3>
+                          <h3 className="mb-1 text-xs font-bold text-slate-600 print:text-base">{SET_PIECE_CATEGORY_LABELS[cat]}</h3>
                           <div className="grid grid-cols-2 gap-2">
                             {SET_PIECE_SIDES.map((side) => {
                               const items = inCategory.filter((sp) => sp.side === side);
                               if (items.length === 0) return null;
                               return (
                                 <div key={side}>
-                                  <span className="mb-0.5 block text-[10px] font-semibold uppercase text-slate-500 print:text-xs">
+                                  <span className="mb-0.5 block text-[10px] font-semibold uppercase text-slate-500 print:text-sm">
                                     {SET_PIECE_SIDE_LABELS[side]}
                                   </span>
                                   <div className="flex flex-col gap-1.5">
@@ -381,7 +381,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
                                         {sp.drawing.length > 0 && (
                                           <DrawingThumbnail strokes={sp.drawing} className="h-16 w-10 shrink-0 rounded border border-slate-200 print:h-24 print:w-16" />
                                         )}
-                                        <div className="text-sm font-semibold text-slate-900 print:text-base">{sp.title}</div>
+                                        <div className="text-sm font-semibold text-slate-900 print:text-lg">{sp.title}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -405,6 +405,6 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
 
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold tracking-wide print:text-sm">{children}</span>
+    <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold tracking-wide print:text-base">{children}</span>
   );
 }
