@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { computeMatchTimes } from "@/lib/schedule";
-import { ageFromBirthdate, formatDate, todayIso } from "@/lib/format";
+import { ageFromBirthdate, formatDate, formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Card, PageTitle } from "@/components/ui";
-import { Absence, CarpoolDuty, Club, Match, Player, StaffMember, WashDuty } from "@/lib/types";
-import { useRole } from "@/lib/auth/RoleProvider";
+import { Absence, CarpoolDuty, Club, LoadEntry, Match, MatchReflection, Player, ScheduleItem, StaffMember, WashDuty } from "@/lib/types";
+import { useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
+import { openLoadSessions, openReflectionMatches, OpenLoadSession } from "@/lib/playerTasks";
 
 // Tenue Sv Steenwijkerwold: rood shirt met 2 diagonale zwarte banen.
 const JERSEY_STYLE = {
@@ -25,6 +26,7 @@ function isBirthdayToday(birthdate: string | null, today: string): boolean {
 
 export default function DashboardPage() {
   const role = useRole();
+  const ownPlayerId = useOwnPlayerId();
   const [players, setPlayers] = useState<Player[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -32,6 +34,9 @@ export default function DashboardPage() {
   const [wash, setWash] = useState<WashDuty[]>([]);
   const [carpool, setCarpool] = useState<CarpoolDuty[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
+  const [reflections, setReflections] = useState<MatchReflection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,8 +48,11 @@ export default function DashboardPage() {
       api.list("wash_duty"),
       api.list("carpool_duty"),
       api.list("absences"),
+      api.list("schedule_items"),
+      api.list("load_entries"),
+      api.list("match_reflections"),
     ])
-      .then(([p, s, m, c, w, cp, ab]) => {
+      .then(([p, s, m, c, w, cp, ab, si, le, mr]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setStaff(s);
         setMatches(m);
@@ -52,6 +60,9 @@ export default function DashboardPage() {
         setWash(w);
         setCarpool(cp);
         setAbsences(ab);
+        setScheduleItems(si);
+        setLoadEntries(le);
+        setReflections(mr);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -69,6 +80,12 @@ export default function DashboardPage() {
   const lastPlayed = [...matches]
     .filter(isPlayed)
     .sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`))[0];
+
+  const isOwnPlayer = role === "speler" && !!ownPlayerId;
+  const ownLoad = loadEntries.filter((l) => l.player_id === ownPlayerId);
+  const ownReflections = reflections.filter((r) => r.player_id === ownPlayerId);
+  const openLoad = isOwnPlayer ? openLoadSessions(scheduleItems, matches, ownLoad, today) : [];
+  const openReflections = isOwnPlayer ? openReflectionMatches(matches, ownReflections, today) : [];
 
   if (loading) return <p className="text-slate-500">Laden…</p>;
 
@@ -103,6 +120,10 @@ export default function DashboardPage() {
       <PageTitle title="Dashboard" subtitle="Sv Steenwijkerwold JO19-1" />
 
       {birthdays.length > 0 && <BirthdayBanner birthdays={birthdays} />}
+
+      {isOwnPlayer && (openLoad.length > 0 || openReflections.length > 0) && (
+        <PlayerTasksCard playerId={ownPlayerId as string} openLoad={openLoad} openReflections={openReflections} />
+      )}
 
       {next ? (
         <NextMatchCard
@@ -165,6 +186,55 @@ export default function DashboardPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+function PlayerTasksCard({
+  playerId,
+  openLoad,
+  openReflections,
+}: {
+  playerId: string;
+  openLoad: OpenLoadSession[];
+  openReflections: Match[];
+}) {
+  const total = openLoad.length + openReflections.length;
+  return (
+    <Link href={`/spelers/${playerId}`} className="mb-6 block">
+      <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-white transition-shadow hover:shadow-md">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+              Jouw taken 📝
+            </div>
+            <h2 className="mt-1 text-lg font-bold">
+              {total} {total === 1 ? "ding" : "dingen"} nog in te vullen
+            </h2>
+          </div>
+          <Badge color="amber">actie nodig</Badge>
+        </div>
+        <div className="mt-3 flex flex-col gap-1.5 text-sm">
+          {openLoad.map((o) => (
+            <div key={`${o.sessionType}-${o.date}`} className="flex items-center gap-2 text-slate-700">
+              <span>{o.sessionType === "training" ? "🏃" : "🏆"}</span>
+              <span className="font-medium">{formatDateShort(o.date)}</span>
+              <span className="text-slate-500">— belasting invullen ({o.label})</span>
+            </div>
+          ))}
+          {openReflections.map((m) => (
+            <div key={m.id} className="flex items-center gap-2 text-slate-700">
+              <span>📊</span>
+              <span className="font-medium">{formatDateShort(m.date)}</span>
+              <span className="text-slate-500">
+                — wedstrijdanalyse invullen (
+                {m.home_away === "away" ? `${m.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${m.opponent}`})
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-xs font-medium text-amber-700">Ga naar je profiel →</div>
+      </Card>
+    </Link>
   );
 }
 

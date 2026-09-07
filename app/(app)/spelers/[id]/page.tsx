@@ -37,10 +37,6 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function isPlayed(m: Match): boolean {
-  return m.score_for !== null && m.score_against !== null;
-}
-
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -364,9 +360,12 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const absenceMinFrom = addDaysIso(selfToday, ABSENCE_MIN_DAYS_NOTICE);
 
   // ---------- Zelfbediening: wedstrijdanalyse ----------
+  // Gebaseerd op de wedstrijddatum, niet op of de staf de uitslag al heeft
+  // ingevuld — anders kan een speler pas analyseren zodra de staf de score
+  // heeft ingevoerd, wat soms pas een dag later gebeurt en dan te laat is.
   const reflectionByMatch = new Map(ownReflections.map((r) => [r.match_id, r]));
   const playedMatchesForReflection = [...matches]
-    .filter(isPlayed)
+    .filter((m) => m.date <= selfToday)
     .sort((a, b) => b.date.localeCompare(a.date));
   const selectedReflectionMatch = playedMatchesForReflection.find((m) => m.id === mrSelectedMatch) ?? null;
 
@@ -929,18 +928,12 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
               {trainingTally.total > 0 && (
                 <span className="text-slate-500"> ({Math.round((trainingTally.present / trainingTally.total) * 100)}%)</span>
               )}
-              {trainingTally.unfilled > 0 && (
-                <span className="text-amber-600"> · {trainingTally.unfilled} nog niet ingevuld</span>
-              )}
             </div>
             <div>
               <span className="font-semibold">{matchTally.present}</span> /{" "}
               <span className="font-semibold">{matchTally.total}</span> wedstrijden aanwezig
               {matchTally.total > 0 && (
                 <span className="text-slate-500"> ({Math.round((matchTally.present / matchTally.total) * 100)}%)</span>
-              )}
-              {matchTally.unfilled > 0 && (
-                <span className="text-amber-600"> · {matchTally.unfilled} nog niet ingevuld</span>
               )}
             </div>
           </div>

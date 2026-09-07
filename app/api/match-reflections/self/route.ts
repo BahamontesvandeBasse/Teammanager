@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getStore } from "@/lib/db";
 import { resolveRole } from "@/lib/auth/access";
+import { todayIso } from "@/lib/format";
 import { Match, MatchReflection } from "@/lib/types";
 
 // Voor spelers die na een gespeelde wedstrijd hun eigen analyse invullen
 // (positief punt, negatief punt, eigen beoordeling). Bewust een los endpoint
 // van /api/data/match_reflections: dat vereist canEdit (admin/staf). Een
 // speler mag alleen zijn eigen reflectie aanmaken/bijwerken (player_id komt
-// uit de sessie, nooit uit de request-body), en alleen voor een wedstrijd die
-// al gespeeld is. In tegenstelling tot de belasting-invoer is dit een eigen
-// mening, geen gemeten data — daarom wel vrij te bewerken (upsert).
+// uit de sessie, nooit uit de request-body), en alleen voor een wedstrijd
+// waarvan de datum al voorbij is. In tegenstelling tot de belasting-invoer is
+// dit een eigen mening, geen gemeten data — daarom wel vrij te bewerken
+// (upsert). Bewust gebaseerd op de datum en niet op of de staf de uitslag al
+// heeft ingevuld: die wordt soms pas een dag later ingevoerd, waardoor
+// spelers anders te laat zouden zijn om nog te reflecteren.
 export async function POST(req: NextRequest) {
   const role = await resolveRole();
   if (role !== "speler") {
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
     const matches = (await store.list("matches")) as unknown as Match[];
     const match = matches.find((m) => m.id === match_id);
     if (!match) return NextResponse.json({ error: "Wedstrijd niet gevonden." }, { status: 404 });
-    if (match.score_for === null || match.score_against === null) {
+    if (match.date > todayIso()) {
       return NextResponse.json({ error: "Deze wedstrijd is nog niet gespeeld." }, { status: 400 });
     }
 

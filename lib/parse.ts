@@ -152,6 +152,7 @@ export function matchFromTeams(
     kickoff_time: time,
     home_away: isHome ? "home" : "away",
     opponent: (isHome ? awayTeam : homeTeam).trim(),
+    type: "competitie",
     competition,
     notes: null,
     score_for: null,

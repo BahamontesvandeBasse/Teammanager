@@ -303,7 +303,6 @@ export default function SpelersPage() {
                       return (
                         <Badge color="slate">
                           🏃 {t.present}/{t.total} trainingen
-                          {t.unfilled > 0 && <span className="text-amber-600"> · {t.unfilled} niet ingevuld</span>}
                         </Badge>
                       );
                     })()}
@@ -312,7 +311,6 @@ export default function SpelersPage() {
                       return (
                         <Badge color="slate">
                           ⚽ {t.present}/{t.total} wedstrijden
-                          {t.unfilled > 0 && <span className="text-amber-600"> · {t.unfilled} niet ingevuld</span>}
                         </Badge>
                       );
                     })()}

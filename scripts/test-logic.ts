@@ -78,6 +78,7 @@ const matches: Match[] = Array.from({ length: 22 }, (_, i) => ({
   kickoff_time: "14:30",
   home_away: i % 2 === 0 ? "home" : "away",
   opponent: `Club ${i}`,
+  type: "competitie",
   competition: null,
   notes: null,
   score_for: null,

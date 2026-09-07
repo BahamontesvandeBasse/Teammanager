@@ -1,18 +1,58 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { formatDate, formatDateShort, todayIso } from "@/lib/format";
+import { layoutForFormation, resolveSlotPlayer } from "@/lib/formations";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
-import { Absence, Match, MatchReflection, MatchStat, Player, ScheduleItem, VideoLink, VideoNote } from "@/lib/types";
+import {
+  Absence,
+  Line,
+  Match,
+  MATCH_TYPES,
+  MATCH_TYPE_LABELS,
+  MatchPreparation,
+  MatchReflection,
+  MatchStat,
+  MatchType,
+  Player,
+  ScheduleItem,
+  SET_PIECE_CATEGORY_LABELS,
+  SET_PIECE_SIDE_LABELS,
+  SetPiece,
+  TacticalMoment,
+  TacticalMomentNotes,
+  VideoLink,
+  VideoNote,
+} from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 
 type StatDraft = Partial<{ goals: string; assists: string; minutes: string; rating: string }>;
 type StatField = "goals" | "assists" | "minutes" | "rating";
+type MatchTypeFilter = "alle" | MatchType;
 
 function isPlayed(m: Match): boolean {
   return m.score_for !== null && m.score_against !== null;
+}
+
+const TACTICAL_MOMENTS: { key: TacticalMoment; label: string; icon: string }[] = [
+  { key: "attacking", label: "Aanvallen", icon: "⚔️" },
+  { key: "defending", label: "Verdedigen", icon: "🛡️" },
+  { key: "transition_to_attack", label: "Omschakelen naar aanval", icon: "⏩" },
+  { key: "transition_to_defense", label: "Omschakelen naar verdedigen", icon: "⏪" },
+];
+
+const LINES: { key: Line; label: string }[] = [
+  { key: "verdediging", label: "Verdediging" },
+  { key: "middenveld", label: "Middenveld" },
+  { key: "aanval", label: "Aanval" },
+];
+
+function filledMoments(m: TacticalMomentNotes | undefined) {
+  if (!m) return [];
+  return TACTICAL_MOMENTS.filter((mo) => m[mo.key]?.trim());
 }
 
 function parseTimestamp(input: string): number | null {
@@ -59,11 +99,14 @@ function ResultatenPageInner() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [reflections, setReflections] = useState<MatchReflection[]>([]);
+  const [preparations, setPreparations] = useState<MatchPreparation[]>([]);
+  const [setPieces, setSetPieces] = useState<SetPiece[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedMatch, setSelectedMatch] = useState<string>("");
   const [selectedVideo, setSelectedVideo] = useState<string>("");
   const [drafts, setDrafts] = useState<Record<string, StatDraft>>({});
+  const [matchTypeFilter, setMatchTypeFilter] = useState<MatchTypeFilter>("alle");
 
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -86,8 +129,10 @@ function ResultatenPageInner() {
       api.list("schedule_items"),
       api.list("absences"),
       api.list("match_reflections"),
+      api.list("match_preparations"),
+      api.list("set_pieces"),
     ])
-      .then(([p, m, s, v, n, si, a, r]) => {
+      .then(([p, m, s, v, n, si, a, r, prep, sp]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setMatches([...m].sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`)));
         setStats(s);
@@ -96,6 +141,8 @@ function ResultatenPageInner() {
         setScheduleItems(si);
         setAbsences(a);
         setReflections(r);
+        setPreparations(prep);
+        setSetPieces(sp);
       })
       .finally(() => setLoading(false));
 
@@ -113,7 +160,9 @@ function ResultatenPageInner() {
   }, [preselectMatch, matches]);
 
   const activePlayers = players.filter((p) => p.active);
-  const playedMatches = matches.filter(isPlayed);
+  const playedMatches = matches
+    .filter(isPlayed)
+    .filter((m) => matchTypeFilter === "alle" || m.type === matchTypeFilter);
   const selected = matches.find((m) => m.id === selectedMatch) ?? null;
 
   function selectMatch(id: string) {
@@ -172,8 +221,10 @@ function ResultatenPageInner() {
   }
 
   const totals = useMemo(() => {
+    const playedMatchIds = new Set(playedMatches.map((m) => m.id));
     const map = new Map<string, { goals: number; assists: number; minutes: number; games: number; ratingSum: number; ratingCount: number }>();
     for (const s of stats) {
+      if (!playedMatchIds.has(s.match_id)) continue;
       const t = map.get(s.player_id) ?? { goals: 0, assists: 0, minutes: 0, games: 0, ratingSum: 0, ratingCount: 0 };
       t.goals += s.goals;
       t.assists += s.assists;
@@ -186,7 +237,7 @@ function ResultatenPageInner() {
       map.set(s.player_id, t);
     }
     return map;
-  }, [stats]);
+  }, [stats, playedMatches]);
 
   const ranking = players
     .map((p) => ({ player: p, t: totals.get(p.id) }))
@@ -240,6 +291,38 @@ function ResultatenPageInner() {
     .map((r) => ({ reflection: r, player: players.find((p) => p.id === r.player_id) }))
     .filter((r): r is { reflection: MatchReflection; player: Player } => !!r.player)
     .sort((a, b) => a.player.name.localeCompare(b.player.name, "nl"));
+
+  // Wedstrijdvoorbereiding van de geselecteerde wedstrijd, zoals ingevuld op /wedstrijden.
+  const selectedPrep = preparations.find((p) => p.match_id === selectedMatch) ?? null;
+  const prepSlots = selectedPrep?.formation ? layoutForFormation(selectedPrep.formation) : [];
+  const prepGuestNames: Record<string, string> = {};
+  const prepSlotMap: Record<string, string> = {};
+  (selectedPrep?.lineup ?? []).forEach((entry) => {
+    if (entry.guest_name) {
+      prepGuestNames[entry.slot] = entry.guest_name;
+      prepSlotMap[entry.slot] = `guest:${entry.slot}`;
+    } else if (entry.player_id) {
+      prepSlotMap[entry.slot] = entry.player_id;
+    }
+  });
+  const prepAbsentPlayerIds = new Set(
+    selected
+      ? absences.filter((a) => a.player_id && selected.date >= a.from && selected.date <= a.until).map((a) => a.player_id as string)
+      : []
+  );
+  const prepSubstituteNames = [
+    ...(selectedPrep?.substitutes ?? []).map((pid) => players.find((p) => p.id === pid)?.name).filter(Boolean),
+    ...(selectedPrep?.guest_substitutes ?? []),
+  ] as string[];
+  const prepTeamMoments = filledMoments(selectedPrep?.tactical_notes?.team);
+  const prepLineTactics = LINES.map((line) => ({
+    line,
+    moments: filledMoments(selectedPrep?.tactical_notes?.line?.[line.key]),
+  })).filter((l) => l.moments.length > 0);
+  const prepSetPieces = setPieces.filter((sp) => selectedPrep?.set_piece_ids?.includes(sp.id));
+  const hasPrepContent =
+    !!selectedPrep &&
+    (prepSlots.length > 0 || prepTeamMoments.length > 0 || prepLineTactics.length > 0 || prepSetPieces.length > 0);
 
   const matchVideos = videoLinks.filter((v) => v.match_id === selectedMatch);
   const currentVideo = videoLinks.find((v) => v.id === selectedVideo) ?? null;
@@ -381,7 +464,26 @@ function ResultatenPageInner() {
 
       <Message text={msg} error={err} />
 
-      <Card className="mb-6 mt-4">
+      <div className="mb-4 mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500">Wedstrijdtype</span>
+        <div className="flex gap-1">
+          {(
+            [["alle", "Alle wedstrijden"], ...MATCH_TYPES.map((t) => [t, MATCH_TYPE_LABELS[t]])] as [MatchTypeFilter, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setMatchTypeFilter(value)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                matchTypeFilter === value ? "border-rose-600 bg-rose-600 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Card className="mb-6">
         <h2 className="mb-3 font-semibold">Seizoensbeeld</h2>
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <StatTile label="Gespeeld" value={record.games} />
@@ -518,6 +620,123 @@ function ResultatenPageInner() {
               </Badge>
             </div>
             <p className="text-sm text-slate-500">{formatDate(selected.date)} · aftrap {selected.kickoff_time}</p>
+          </Card>
+
+          <Card className="mb-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="font-semibold">Wedstrijdvoorbereiding</h2>
+              <Link href={`/wedstrijden/print/${selected.id}`} target="_blank" className="text-xs text-rose-600 hover:underline">
+                Volledige weergave →
+              </Link>
+            </div>
+            {!hasPrepContent ? (
+              <p className="text-sm text-slate-500">Er is geen wedstrijdvoorbereiding ingevuld voor deze wedstrijd.</p>
+            ) : (
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  {prepSlots.length > 0 && (
+                    <div className="mb-4">
+                      {selectedPrep!.formation && (
+                        <p className="mb-2 text-center text-sm font-bold text-slate-700">{selectedPrep!.formation}</p>
+                      )}
+                      <div
+                        className="relative mx-auto w-full max-w-xs overflow-hidden rounded-xl border-2 border-white/80 shadow-inner"
+                        style={{ aspectRatio: "2 / 3", background: "linear-gradient(180deg, #16a34a, #15803d)" }}
+                      >
+                        <div className="absolute left-0 right-0 top-1/2 h-px bg-white/50" />
+                        <div className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/50" />
+                        <div className="absolute left-1/2 top-0 h-[13%] w-[58%] -translate-x-1/2 border border-t-0 border-white/50" />
+                        <div className="absolute left-1/2 bottom-0 h-[13%] w-[58%] -translate-x-1/2 border border-b-0 border-white/50" />
+
+                        {prepSlots.map((slot) => {
+                          const player = resolveSlotPlayer(prepSlotMap[slot.id], prepGuestNames, players);
+                          const pid = prepSlotMap[slot.id];
+                          const isAbsent = !!pid && !pid.startsWith("guest:") && prepAbsentPlayerIds.has(pid);
+                          return (
+                            <div
+                              key={slot.id}
+                              style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
+                              className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5"
+                            >
+                              <span
+                                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white shadow ${
+                                  isAbsent
+                                    ? "border-red-400 bg-red-600"
+                                    : player
+                                      ? player.isGuest
+                                        ? "border-white bg-purple-700"
+                                        : "border-white bg-slate-900"
+                                      : "border-dashed border-white/70"
+                                }`}
+                              >
+                                {isAbsent ? "🚫" : player ? (player.isGuest ? "G" : (player.shirtNumber ?? "•")) : slot.label}
+                              </span>
+                              <span className="max-w-[64px] truncate rounded bg-black/50 px-1 text-[10px] leading-tight text-white">
+                                {player?.name.split(" ")[0] ?? ""}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {prepSubstituteNames.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Wissels</p>
+                      <p className="text-sm text-slate-700">{prepSubstituteNames.join(" · ")}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  {prepTeamMoments.length > 0 && (
+                    <div className="mb-3">
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Team-tactiek</p>
+                      <div className="flex flex-col gap-1">
+                        {prepTeamMoments.map((m) => (
+                          <p key={m.key} className="text-sm text-slate-700">
+                            <span className="font-medium">{m.icon} {m.label}:</span> {selectedPrep!.tactical_notes!.team[m.key]}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {prepLineTactics.length > 0 && (
+                    <div className="mb-3">
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Tactiek per linie</p>
+                      <div className="flex flex-col gap-2">
+                        {prepLineTactics.map(({ line, moments }) => (
+                          <div key={line.key}>
+                            <p className="text-xs font-bold text-slate-600">{line.label}</p>
+                            {moments.map((m) => (
+                              <p key={m.key} className="text-sm text-slate-700">
+                                <span className="font-medium">{m.icon} {m.label}:</span>{" "}
+                                {selectedPrep!.tactical_notes!.line[line.key][m.key]}
+                              </p>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {prepSetPieces.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Standaardsituaties</p>
+                      <div className="flex flex-col gap-1">
+                        {prepSetPieces.map((sp) => (
+                          <p key={sp.id} className="text-sm text-slate-700">
+                            <span className="font-medium">{sp.title}</span>{" "}
+                            <span className="text-slate-500">
+                              ({SET_PIECE_CATEGORY_LABELS[sp.category]} — {SET_PIECE_SIDE_LABELS[sp.side]})
+                            </span>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </Card>
 
           <Card className="mb-6">

@@ -7,7 +7,7 @@ import { ParsedMatch } from "@/lib/parse";
 import { formatDateShort, todayIso } from "@/lib/format";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { AbsenceTimeline } from "@/components/AbsenceTimeline";
-import { Absence, Club, LoadEntry, Match, Player, ScheduleItem, StaffMember } from "@/lib/types";
+import { Absence, Club, LoadEntry, Match, MATCH_TYPES, MATCH_TYPE_LABELS, MatchType, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 import { isTrainingActivity } from "@/lib/training";
 
@@ -96,6 +96,7 @@ export default function ProgrammaPage() {
   const [newKickoff, setNewKickoff] = useState("");
   const [newOpponent, setNewOpponent] = useState("");
   const [newHomeAway, setNewHomeAway] = useState<"home" | "away">("home");
+  const [newMatchType, setNewMatchType] = useState<MatchType>("competitie");
   const [newCompetition, setNewCompetition] = useState("");
 
   const [newItemDate, setNewItemDate] = useState("");
@@ -260,6 +261,7 @@ export default function ProgrammaPage() {
         kickoff_time: newKickoff,
         home_away: newHomeAway,
         opponent: newOpponent.trim(),
+        type: newMatchType,
         competition: newCompetition.trim() || null,
         notes: null,
         score_for: null,
@@ -284,6 +286,7 @@ export default function ProgrammaPage() {
       setNewKickoff("");
       setNewOpponent("");
       setNewHomeAway("home");
+      setNewMatchType("competitie");
       setNewCompetition("");
       await reload();
       flash("Wedstrijd toegevoegd aan het programma.");
@@ -335,6 +338,14 @@ export default function ProgrammaPage() {
     await reload();
   }
 
+  // Voor een verplaatste wedstrijd (nieuwe datum/aftraptijd van de bond) of een
+  // verkeerd geïmporteerd wedstrijdtype — rechtstreeks aan te passen i.p.v. de
+  // wedstrijd te moeten verwijderen en opnieuw aan te maken.
+  async function updateMatchDetail(m: Match, field: "date" | "kickoff_time" | "type", value: string) {
+    await api.update("matches", m.id, { [field]: value });
+    await reload();
+  }
+
   async function removeMatch(m: Match) {
     if (!confirm(`Wedstrijd tegen ${m.opponent} op ${formatDateShort(m.date)} verwijderen?`)) return;
     await api.remove("matches", m.id);
@@ -360,15 +371,6 @@ export default function ProgrammaPage() {
     });
   }, [agendaRows, typeFilter, search]);
 
-  function absentNamesForDate(date: string): string[] {
-    return absences
-      .filter((a) => date >= a.from && date <= a.until)
-      .map((a) => {
-        if (a.player_id) return players.find((p) => p.id === a.player_id)?.name ?? "?";
-        return staff.find((s) => s.id === a.staff_id)?.name ?? "?";
-      });
-  }
-
   // ---------- Snel aan-/afwezigheid per training/wedstrijd ----------
   // Voor last-minute wijzigingen (iemand belt dat hij/zij toch kan komen, of
   // meldt zich ziek vlak van tevoren) hoeft de staf niet de volledige
@@ -376,6 +378,8 @@ export default function ProgrammaPage() {
   // met alleen `absent` volstaat, tallyAttendance elders leest die net zo
   // goed. Een reeds bestaande rij mét ingevulde belasting wordt nooit
   // stilzwijgend verwijderd, om te voorkomen dat een sneltoets die data wist.
+  // Er bestaat bewust geen "onbekend"-status: zonder invoer en zonder
+  // lopende afwezigheidsperiode is iemand gewoon aanwezig.
   function sessionTypeForRow(row: AgendaRow): "training" | "wedstrijd" | null {
     if (row.kind === "match") return "wedstrijd";
     if (isTrainingActivity(row.item.activity)) return "training";
@@ -388,19 +392,45 @@ export default function ProgrammaPage() {
 
   const activePlayers = players.filter((p) => p.active);
 
-  async function cycleAttendance(
+  function attendanceStatusFor(
     playerId: string,
     date: string,
-    sessionType: "training" | "wedstrijd",
-    entry: LoadEntry | undefined
-  ) {
+    sessionType: "training" | "wedstrijd"
+  ): { status: "present" | "absent" | "period-absent"; entry: LoadEntry | undefined; periodAbsent: boolean } {
+    const entry = loadEntries.find(
+      (e) => e.player_id === playerId && e.date === date && e.session_type === sessionType
+    );
+    const periodAbsent = absences.some((a) => a.player_id === playerId && date >= a.from && date <= a.until);
+    const status = entry ? (entry.absent ? "absent" : "present") : periodAbsent ? "period-absent" : "present";
+    return { status, entry, periodAbsent };
+  }
+
+  function absentNamesForDate(date: string, sessionType: "training" | "wedstrijd" | null): string[] {
+    const names: string[] = [];
+    for (const p of players) {
+      if (sessionType && attendanceStatusFor(p.id, date, sessionType).status !== "present") {
+        names.push(p.name);
+        continue;
+      }
+      if (!sessionType && absences.some((a) => a.player_id === p.id && date >= a.from && date <= a.until)) {
+        names.push(p.name);
+      }
+    }
+    for (const s of staff) {
+      if (absences.some((a) => a.staff_id === s.id && date >= a.from && date <= a.until)) names.push(s.name);
+    }
+    return names;
+  }
+
+  async function cycleAttendance(playerId: string, date: string, sessionType: "training" | "wedstrijd") {
+    const { entry, periodAbsent } = attendanceStatusFor(playerId, date, sessionType);
     try {
       if (!entry) {
         await api.create("load_entries", {
           player_id: playerId,
           date,
           session_type: sessionType,
-          absent: false,
+          absent: !periodAbsent,
           minutes: null,
           rpe: null,
           notes: null,
@@ -559,34 +589,22 @@ export default function ProgrammaPage() {
         <td colSpan={colSpan} className="px-4 py-3">
           <div className="flex flex-wrap gap-1.5">
             {activePlayers.map((p) => {
-              const entry = loadEntries.find(
-                (e) => e.player_id === p.id && e.date === date && e.session_type === sessionType
-              );
-              const periodAbsent = absences.some((a) => a.player_id === p.id && date >= a.from && date <= a.until);
-              const status: "present" | "absent" | "period-absent" | "unfilled" = entry
-                ? entry.absent
-                  ? "absent"
-                  : "present"
-                : periodAbsent
-                ? "period-absent"
-                : "unfilled";
+              const { status } = attendanceStatusFor(p.id, date, sessionType);
               const styles: Record<typeof status, string> = {
                 present: "border-emerald-600 bg-emerald-600 text-white",
                 absent: "border-red-500 bg-red-500 text-white",
                 "period-absent": "border-amber-400 bg-amber-50 text-amber-700",
-                unfilled: "border-slate-300 bg-white text-slate-600",
               };
               const title = {
                 present: "Aanwezig — klik voor afwezig",
                 absent: "Afwezig — klik om te wissen",
                 "period-absent": "Afwezig (periode) — klik om aanwezig te markeren",
-                unfilled: "Onbekend — klik om aanwezig te markeren",
               }[status];
               return (
                 <button
                   key={p.id}
                   title={title}
-                  onClick={() => cycleAttendance(p.id, date, sessionType, entry)}
+                  onClick={() => cycleAttendance(p.id, date, sessionType)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium ${styles[status]}`}
                 >
                   {p.name}
@@ -595,8 +613,8 @@ export default function ProgrammaPage() {
             })}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Klik op een naam om de aanwezigheid voor deze sessie te overschrijven. Groen = aanwezig, rood = afwezig,
-            amber = afwezig door een lopende periode, grijs = onbekend.
+            Klik op een naam om de aanwezigheid voor deze sessie te overschrijven. Groen = aanwezig (standaard, tenzij
+            afgemeld), rood = afwezig, amber = afwezig door een lopende periode.
           </p>
         </td>
       </tr>
@@ -604,14 +622,14 @@ export default function ProgrammaPage() {
   }
 
   function agendaRow(row: AgendaRow, showResult: boolean) {
-    const absentNames = absentNamesForDate(row.date);
+    const sessionType = sessionTypeForRow(row);
+    const absentNames = absentNamesForDate(row.date, sessionType);
     const afwezigCell =
       absentNames.length === 0 ? (
         <span className="text-xs text-slate-500">–</span>
       ) : (
         <span className="text-xs text-amber-700">{absentNames.join(", ")}</span>
       );
-    const sessionType = sessionTypeForRow(row);
     const colSpan = showResult ? 7 : 6;
 
     if (row.kind === "match") {
@@ -621,11 +639,48 @@ export default function ProgrammaPage() {
       return (
         <Fragment key={`match-${match.id}`}>
         <tr className="border-b border-slate-100 bg-blue-50/30">
-          <td className={tdCls}>{formatDateShort(match.date)}</td>
           <td className={tdCls}>
-            <Badge color="blue">{activity}</Badge>
+            {canEdit ? (
+              <input
+                type="date"
+                className={`${inputCls} w-36 text-xs`}
+                defaultValue={match.date}
+                onBlur={(e) => e.target.value !== match.date && updateMatchDetail(match, "date", e.target.value)}
+              />
+            ) : (
+              formatDateShort(match.date)
+            )}
           </td>
-          <td className={`${tdCls} font-medium text-slate-700`}>{match.kickoff_time || "–"}</td>
+          <td className={tdCls}>
+            <div className="flex flex-col items-start gap-1">
+              <Badge color="blue">{activity}</Badge>
+              {canEdit ? (
+                <select
+                  className={`${inputCls} w-36 text-xs`}
+                  value={match.type}
+                  onChange={(e) => updateMatchDetail(match, "type", e.target.value)}
+                >
+                  {MATCH_TYPES.map((t) => (
+                    <option key={t} value={t}>{MATCH_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              ) : (
+                match.type === "oefenwedstrijd" && <Badge color="amber">Oefenwedstrijd</Badge>
+              )}
+            </div>
+          </td>
+          <td className={tdCls}>
+            {canEdit ? (
+              <input
+                type="time"
+                className={`${inputCls} w-24 text-xs`}
+                defaultValue={match.kickoff_time}
+                onBlur={(e) => e.target.value !== match.kickoff_time && updateMatchDetail(match, "kickoff_time", e.target.value)}
+              />
+            ) : (
+              <span className="font-medium text-slate-700">{match.kickoff_time || "–"}</span>
+            )}
+          </td>
           {showResult && (
             <td className={tdCls}>
               {played ? (
@@ -1000,7 +1055,7 @@ export default function ProgrammaPage() {
               </div>
 
               {newKind === "wedstrijd" ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                   <input type="date" className={inputCls} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
                   <input type="time" className={inputCls} value={newKickoff} onChange={(e) => setNewKickoff(e.target.value)} />
                   <input
@@ -1017,6 +1072,15 @@ export default function ProgrammaPage() {
                   >
                     <option value="home">Thuis</option>
                     <option value="away">Uit</option>
+                  </select>
+                  <select
+                    className={inputCls}
+                    value={newMatchType}
+                    onChange={(e) => setNewMatchType(e.target.value as MatchType)}
+                  >
+                    {MATCH_TYPES.map((t) => (
+                      <option key={t} value={t}>{MATCH_TYPE_LABELS[t]}</option>
+                    ))}
                   </select>
                   <input
                     type="text"

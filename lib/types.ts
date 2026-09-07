@@ -28,12 +28,20 @@ export type Club = {
 // Vertrekpunt voor alle reistijdberekeningen (Google Maps Distance Matrix).
 export const HOME_ADDRESS = "Oldemarktseweg 92, 8341 SH Steenwijkerwold";
 
+export type MatchType = "competitie" | "oefenwedstrijd";
+export const MATCH_TYPES: MatchType[] = ["competitie", "oefenwedstrijd"];
+export const MATCH_TYPE_LABELS: Record<MatchType, string> = {
+  competitie: "Competitie",
+  oefenwedstrijd: "Oefenwedstrijd",
+};
+
 export type Match = {
   id: string;
   date: string; // YYYY-MM-DD
   kickoff_time: string; // HH:mm
   home_away: "home" | "away";
   opponent: string;
+  type: MatchType;
   competition: string | null;
   notes: string | null;
   score_for: number | null; // doelpunten Sv Steenwijkerwold — alleen bij gespeelde wedstrijden
