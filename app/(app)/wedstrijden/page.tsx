@@ -227,6 +227,9 @@ function WedstrijdenPageInner() {
   const upcomingMatches = [...matches]
     .filter((m) => !isPlayed(m))
     .sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`));
+  const playedMatchesList = [...matches]
+    .filter(isPlayed)
+    .sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`));
 
   function applyPreparation(prep: MatchPreparation | undefined) {
     setFormationState(prep?.formation ?? "");
@@ -500,8 +503,15 @@ function WedstrijdenPageInner() {
             </Badge>
           </div>
         </div>
-        <div className="font-semibold">
-          {m.home_away === "away" ? `${m.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${m.opponent}`}
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold">
+            {m.home_away === "away" ? `${m.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${m.opponent}`}
+          </span>
+          {isPlayed(m) && (
+            <Badge color="slate">
+              {m.home_away === "away" ? `${m.score_against}-${m.score_for}` : `${m.score_for}-${m.score_against}`}
+            </Badge>
+          )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {checklist.map((c) => (
@@ -584,6 +594,17 @@ function WedstrijdenPageInner() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {upcomingMatches.map((m, i) => matchTile(m, i === 0))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="mb-6">
+        <h2 className="mb-3 font-semibold">Gespeeld</h2>
+        {playedMatchesList.length === 0 ? (
+          <p className="text-sm text-slate-500">Nog geen wedstrijden gespeeld.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {playedMatchesList.map((m) => matchTile(m, false))}
           </div>
         )}
       </Card>
