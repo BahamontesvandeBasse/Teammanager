@@ -10,6 +10,7 @@ import { AbsenceTimeline } from "@/components/AbsenceTimeline";
 import { Absence, Club, LoadEntry, Match, MATCH_TYPES, MATCH_TYPE_LABELS, MatchType, Player, ScheduleItem, StaffMember } from "@/lib/types";
 import { useCanEdit } from "@/lib/auth/RoleProvider";
 import { isTrainingActivity } from "@/lib/training";
+import { attendanceStatusFor as computeAttendanceStatus } from "@/lib/attendance";
 
 type AgendaRow =
   | { kind: "schedule"; date: string; item: ScheduleItem }
@@ -392,17 +393,8 @@ export default function ProgrammaPage() {
 
   const activePlayers = players.filter((p) => p.active);
 
-  function attendanceStatusFor(
-    playerId: string,
-    date: string,
-    sessionType: "training" | "wedstrijd"
-  ): { status: "present" | "absent" | "period-absent"; entry: LoadEntry | undefined; periodAbsent: boolean } {
-    const entry = loadEntries.find(
-      (e) => e.player_id === playerId && e.date === date && e.session_type === sessionType
-    );
-    const periodAbsent = absences.some((a) => a.player_id === playerId && date >= a.from && date <= a.until);
-    const status = entry ? (entry.absent ? "absent" : "present") : periodAbsent ? "period-absent" : "present";
-    return { status, entry, periodAbsent };
+  function attendanceStatusFor(playerId: string, date: string, sessionType: "training" | "wedstrijd") {
+    return computeAttendanceStatus(playerId, date, sessionType, loadEntries, absences);
   }
 
   function absentNamesForDate(date: string, sessionType: "training" | "wedstrijd" | null): string[] {

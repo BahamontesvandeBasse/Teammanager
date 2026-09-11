@@ -112,7 +112,9 @@
     ".next-preview-57255/types/**/*.ts",
     ".next-preview-57255/dev/types/**/*.ts",
     ".next-preview-51364/types/**/*.ts",
-    ".next-preview-51364/dev/types/**/*.ts"
+    ".next-preview-51364/dev/types/**/*.ts",
+    ".next-preview-50500/types/**/*.ts",
+    ".next-preview-50500/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

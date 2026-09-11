@@ -13,6 +13,25 @@ export type AttendanceTally = {
   total: number;
 };
 
+export type AttendanceStatus = "present" | "absent" | "period-absent";
+
+// Status van één speler voor één specifieke sessie: een handmatige invoer/
+// override in load_entries (bv. de sneltoets op Programma) gaat altijd vóór
+// een lopende afwezigheidsperiode — zo kan de staf iemand alsnog aanwezig
+// zetten ondanks een gemelde afwezigheid, of andersom.
+export function attendanceStatusFor(
+  playerId: string,
+  date: string,
+  sessionType: "training" | "wedstrijd",
+  entries: LoadEntry[],
+  absences: Absence[]
+): { status: AttendanceStatus; entry: LoadEntry | undefined; periodAbsent: boolean } {
+  const entry = entries.find((e) => e.player_id === playerId && e.date === date && e.session_type === sessionType);
+  const periodAbsent = absences.some((a) => a.player_id === playerId && date >= a.from && date <= a.until);
+  const status: AttendanceStatus = entry ? (entry.absent ? "absent" : "present") : periodAbsent ? "period-absent" : "present";
+  return { status, entry, periodAbsent };
+}
+
 export function tallyAttendance(
   dates: string[],
   playerId: string,

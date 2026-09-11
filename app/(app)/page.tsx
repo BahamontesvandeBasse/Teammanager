@@ -9,6 +9,7 @@ import { Badge, Card, PageTitle } from "@/components/ui";
 import { Absence, CarpoolDuty, Club, LoadEntry, Match, MatchReflection, Player, ScheduleItem, StaffMember, WashDuty } from "@/lib/types";
 import { useOwnPlayerId, useRole } from "@/lib/auth/RoleProvider";
 import { openLoadSessions, openReflectionMatches, OpenLoadSession } from "@/lib/playerTasks";
+import { attendanceStatusFor } from "@/lib/attendance";
 
 // Tenue Sv Steenwijkerwold: rood shirt met 2 diagonale zwarte banen.
 const JERSEY_STYLE = {
@@ -132,9 +133,9 @@ export default function DashboardPage() {
           hidePrepLink={role === "speler"}
           washName={wash.filter((w) => w.match_id === next.id).map((w) => playerName(w.player_id))[0]}
           driverNames={carpool.filter((c) => c.match_id === next.id).map((c) => playerName(c.player_id))}
-          absentNames={absences
-            .filter((a) => a.player_id && next.date >= a.from && next.date <= a.until)
-            .map((a) => playerName(a.player_id as string))}
+          absentNames={players
+            .filter((p) => attendanceStatusFor(p.id, next.date, "wedstrijd", loadEntries, absences).status !== "present")
+            .map((p) => p.name)}
         />
       ) : (
         <Card>
