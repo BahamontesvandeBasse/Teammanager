@@ -440,6 +440,25 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const trainingTally = tallyAttendance(trainingDates, id, load, "training", absences);
   const matchTally = tallyAttendance(matchDates, id, load, "wedstrijd", absences);
 
+  // Sessies waarvoor deze speler geen belasting heeft ingevuld en ook niet is
+  // afgemeld — alleen voor staf zichtbaar, om te zien wie nog moet invullen.
+  // Beperkt tot een recent venster, anders groeit dit een heel seizoen lang door.
+  const MISSING_LOAD_WINDOW_DAYS = 30;
+  const missingWindowStart = addDaysIso(today, -MISSING_LOAD_WINDOW_DAYS);
+  function isMissingLoad(date: string, sessionType: "training" | "wedstrijd"): boolean {
+    const hasEntry = load.some((l) => l.date === date && l.session_type === sessionType);
+    if (hasEntry) return false;
+    return !absences.some((a) => date >= a.from && date <= a.until);
+  }
+  const missingSessions = [
+    ...trainingDates
+      .filter((d) => d >= missingWindowStart && isMissingLoad(d, "training"))
+      .map((d) => ({ date: d, sessionType: "training" as const })),
+    ...matchDates
+      .filter((d) => d >= missingWindowStart && isMissingLoad(d, "wedstrijd"))
+      .map((d) => ({ date: d, sessionType: "wedstrijd" as const })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
   const hasData = stats.length > 0 || load.length > 0 || videoNotes.length > 0;
 
   return (
@@ -937,6 +956,20 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </div>
+          {canEdit && missingSessions.length > 0 && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="mb-1.5 text-xs font-semibold text-amber-800">
+                ⚠ Nog niet ingevuld (laatste {MISSING_LOAD_WINDOW_DAYS} dagen)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {missingSessions.map((s) => (
+                  <Badge key={`${s.date}-${s.sessionType}`} color="amber">
+                    {formatDateShort(s.date)} · {s.sessionType === "training" ? "training" : "wedstrijd"}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
           {injuryFlags.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-1.5">
               {seriousInjuries.length > 0 && <Badge color="red">⚠ {seriousInjuries.length}× blessure gemeld</Badge>}

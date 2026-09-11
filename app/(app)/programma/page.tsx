@@ -968,7 +968,7 @@ export default function ProgrammaPage() {
         defaultOpen
         className="mb-6"
       >
-        {agendaTable(upcomingAgenda, "Niets aankomend gepland.", false)}
+        {agendaTable(upcomingAgenda, "Niets aankomend gepland.", true)}
       </CollapsibleCard>
 
       <CollapsibleCard
