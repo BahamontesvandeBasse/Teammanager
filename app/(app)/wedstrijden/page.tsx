@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { formatDate, formatDateShort } from "@/lib/format";
 import { computeMatchTimes } from "@/lib/schedule";
 import { injurySeverityColor } from "@/lib/loadAdvice";
+import { attendanceStatusFor } from "@/lib/attendance";
 import { FORMATION_PRESETS, FormationSlot, isGuestId, layoutForFormation, resolveSlotPlayer } from "@/lib/formations";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import { DrawingThumbnail, TacticsBoardModal } from "@/components/TacticsBoard";
@@ -576,7 +577,9 @@ function WedstrijdenPageInner() {
   const drivers = selectedCarpool.map((d) => players.find((p) => p.id === d.player_id)).filter(Boolean) as Player[];
   const absentPlayerIds = new Set(
     selected
-      ? absences.filter((a) => a.player_id && selected.date >= a.from && selected.date <= a.until).map((a) => a.player_id as string)
+      ? players
+          .filter((p) => attendanceStatusFor(p.id, selected.date, "wedstrijd", selectedLoad, absences).status !== "present")
+          .map((p) => p.id)
       : []
   );
 
