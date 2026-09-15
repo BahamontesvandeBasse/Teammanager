@@ -2,12 +2,14 @@
 
 import { use, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { attendanceStatusFor } from "@/lib/attendance";
 import { formatDate } from "@/lib/format";
 import { layoutForFormation, resolveSlotPlayer } from "@/lib/formations";
 import { DrawingThumbnail } from "@/components/TacticsBoard";
 import {
   Absence,
   Line,
+  LoadEntry,
   Match,
   MatchPreparation,
   Player,
@@ -71,6 +73,7 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
   const [prep, setPrep] = useState<MatchPreparation | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
   const [setPieces, setSetPieces] = useState<SetPiece[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,13 +83,15 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
       api.list("match_preparations"),
       api.list("players"),
       api.list("absences"),
+      api.list("load_entries"),
       api.list("set_pieces"),
     ])
-      .then(([matches, preps, p, abs, sp]) => {
+      .then(([matches, preps, p, abs, load, sp]) => {
         setMatch(matches.find((m) => m.id === id) ?? null);
         setPrep(preps.find((pr) => pr.match_id === id) ?? null);
         setPlayers(p);
         setAbsences(abs);
+        setLoadEntries(load);
         setSetPieces(sp);
       })
       .finally(() => setLoading(false));
@@ -115,7 +120,9 @@ export default function PrintPreparationPage({ params }: { params: Promise<{ id:
   }));
   const chosenSetPieces = setPieces.filter((sp) => prep?.set_piece_ids?.includes(sp.id));
   const absentPlayerIds = new Set(
-    absences.filter((a) => a.player_id && match.date >= a.from && match.date <= a.until).map((a) => a.player_id as string)
+    players
+      .filter((p) => attendanceStatusFor(p.id, match.date, "wedstrijd", loadEntries, absences).status !== "present")
+      .map((p) => p.id)
   );
   const absentInLineup = Object.entries(slotMap)
     .filter(([, pid]) => !pid.startsWith("guest:") && absentPlayerIds.has(pid))
