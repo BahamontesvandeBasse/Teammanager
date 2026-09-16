@@ -448,7 +448,7 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   function isMissingLoad(date: string, sessionType: "training" | "wedstrijd"): boolean {
     const hasEntry = load.some((l) => l.date === date && l.session_type === sessionType);
     if (hasEntry) return false;
-    return !absences.some((a) => date >= a.from && date <= a.until);
+    return !absences.some((a) => a.player_id === id && date >= a.from && date <= a.until);
   }
   const missingSessions = [
     ...trainingDates

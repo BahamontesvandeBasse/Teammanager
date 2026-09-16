@@ -4,12 +4,14 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { attendanceStatusFor, tallyAttendance } from "@/lib/attendance";
 import { formatDate, formatDateShort, todayIso } from "@/lib/format";
 import { layoutForFormation, resolveSlotPlayer } from "@/lib/formations";
 import { Badge, Button, Card, Message, PageTitle, inputCls, tdCls, thCls } from "@/components/ui";
 import {
   Absence,
   Line,
+  LoadEntry,
   Match,
   MATCH_TYPES,
   MATCH_TYPE_LABELS,
@@ -98,6 +100,7 @@ function ResultatenPageInner() {
   const [videoNotes, setVideoNotes] = useState<VideoNote[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [loadEntries, setLoadEntries] = useState<LoadEntry[]>([]);
   const [reflections, setReflections] = useState<MatchReflection[]>([]);
   const [preparations, setPreparations] = useState<MatchPreparation[]>([]);
   const [setPieces, setSetPieces] = useState<SetPiece[]>([]);
@@ -128,11 +131,12 @@ function ResultatenPageInner() {
       api.list("video_notes"),
       api.list("schedule_items"),
       api.list("absences"),
+      api.list("load_entries"),
       api.list("match_reflections"),
       api.list("match_preparations"),
       api.list("set_pieces"),
     ])
-      .then(([p, m, s, v, n, si, a, r, prep, sp]) => {
+      .then(([p, m, s, v, n, si, a, le, r, prep, sp]) => {
         setPlayers([...p].sort((a, b) => a.name.localeCompare(b.name, "nl")));
         setMatches([...m].sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`)));
         setStats(s);
@@ -140,6 +144,7 @@ function ResultatenPageInner() {
         setVideoNotes(n);
         setScheduleItems(si);
         setAbsences(a);
+        setLoadEntries(le);
         setReflections(r);
         setPreparations(prep);
         setSetPieces(sp);
@@ -248,20 +253,21 @@ function ResultatenPageInner() {
 
   const trainingAttendance = useMemo(() => {
     const today = todayIso();
-    const pastTrainings = scheduleItems.filter(
-      (i) => i.activity.toLowerCase().includes("training") && i.date <= today
-    );
+    const trainingDates = scheduleItems
+      .filter((i) => i.activity.toLowerCase().includes("training") && i.date <= today)
+      .map((i) => i.date);
     return activePlayers
       .map((p) => {
-        const total = pastTrainings.length;
-        const missed = pastTrainings.filter((t) =>
-          absences.some((a) => a.player_id === p.id && t.date >= a.from && t.date <= a.until)
-        ).length;
-        const attended = total - missed;
-        return { player: p, total, attended, pct: total > 0 ? (attended / total) * 100 : null };
+        const tally = tallyAttendance(trainingDates, p.id, loadEntries, "training", absences);
+        return {
+          player: p,
+          total: tally.total,
+          attended: tally.present,
+          pct: tally.total > 0 ? (tally.present / tally.total) * 100 : null,
+        };
       })
       .sort((a, b) => (a.pct ?? 100) - (b.pct ?? 100));
-  }, [scheduleItems, absences, activePlayers]);
+  }, [scheduleItems, absences, loadEntries, activePlayers]);
 
   const record = useMemo(() => {
     let wins = 0;
@@ -307,7 +313,9 @@ function ResultatenPageInner() {
   });
   const prepAbsentPlayerIds = new Set(
     selected
-      ? absences.filter((a) => a.player_id && selected.date >= a.from && selected.date <= a.until).map((a) => a.player_id as string)
+      ? players
+          .filter((p) => attendanceStatusFor(p.id, selected.date, "wedstrijd", loadEntries, absences).status !== "present")
+          .map((p) => p.id)
       : []
   );
   const prepSubstituteNames = [
