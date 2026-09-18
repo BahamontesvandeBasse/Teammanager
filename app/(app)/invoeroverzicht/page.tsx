@@ -67,6 +67,16 @@ export default function InvoerOverzichtPage() {
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [reflections, setReflections] = useState<MatchReflection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedGaps, setExpandedGaps] = useState<Set<string>>(new Set());
+
+  function toggleGapExpanded(key: string) {
+    setExpandedGaps((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   useEffect(() => {
     Promise.all([
@@ -185,28 +195,46 @@ export default function InvoerOverzichtPage() {
         {sessionGaps.length === 0 ? (
           <p className="text-sm text-slate-500">🎉 Alles is ingevuld — niemand mist nog belasting of een wedstrijdreview.</p>
         ) : (
+          <>
+          <p className="mb-1 text-xs text-slate-400">Klik op een sessie om de namen te tonen/verbergen.</p>
           <div className="divide-y divide-slate-100">
-            {sessionGaps.map((g) => (
-              <div key={`${g.kind}|${g.date}|${g.title}`} className="flex flex-wrap items-start gap-3 py-2.5">
-                <span className="w-24 shrink-0 text-sm text-slate-500">{formatDateShort(g.date)}</span>
-                <span className="w-8 shrink-0 text-center" aria-hidden>{g.icon}</span>
-                <div className="min-w-[160px] flex-1">
-                  <div className="text-sm font-medium text-slate-800">
-                    {g.title} <span className="font-normal text-slate-400">· {g.kind}</span>
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap gap-x-1 text-sm text-slate-600">
-                    {g.missingPlayers.map((p, i) => (
-                      <span key={p.id}>
-                        <Link href={`/spelers/${p.id}`} className="hover:text-rose-600 hover:underline">{p.name}</Link>
-                        {i < g.missingPlayers.length - 1 ? "," : ""}
-                      </span>
-                    ))}
-                  </div>
+            {sessionGaps.map((g) => {
+              const key = `${g.kind}|${g.date}|${g.title}`;
+              const expanded = expandedGaps.has(key);
+              return (
+                <div key={key} className="py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleGapExpanded(key)}
+                    className="flex w-full flex-wrap items-start gap-3 text-left"
+                  >
+                    <span className={`mt-0.5 w-4 shrink-0 text-xs text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden>
+                      ›
+                    </span>
+                    <span className="w-24 shrink-0 text-sm text-slate-500">{formatDateShort(g.date)}</span>
+                    <span className="w-8 shrink-0 text-center" aria-hidden>{g.icon}</span>
+                    <div className="min-w-[160px] flex-1">
+                      <div className="text-sm font-medium text-slate-800">
+                        {g.title} <span className="font-normal text-slate-400">· {g.kind}</span>
+                      </div>
+                    </div>
+                    <Badge color="red">{g.missingPlayers.length}</Badge>
+                  </button>
+                  {expanded && (
+                    <div className="mt-1 flex flex-wrap gap-x-1 pl-11 text-sm text-slate-600">
+                      {g.missingPlayers.map((p, i) => (
+                        <span key={p.id}>
+                          <Link href={`/spelers/${p.id}`} className="hover:text-rose-600 hover:underline">{p.name}</Link>
+                          {i < g.missingPlayers.length - 1 ? "," : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <Badge color="red">{g.missingPlayers.length}</Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          </>
         )}
       </Card>
 
