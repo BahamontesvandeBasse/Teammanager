@@ -823,6 +823,7 @@ function ResultatenPageInner() {
           </Card>
 
           {canEdit && (
+            <div id="zelfreflecties">
             <Card className="mb-6">
               <h2 className="mb-1 font-semibold">Zelfreflecties spelers 📊</h2>
               <p className="mb-3 text-xs text-slate-500">
@@ -855,6 +856,7 @@ function ResultatenPageInner() {
                 </div>
               )}
             </Card>
+            </div>
           )}
 
           <Card className="mb-6">

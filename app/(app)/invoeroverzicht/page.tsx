@@ -274,11 +274,20 @@ export default function InvoerOverzichtPage() {
                         {row.player.name}
                       </Link>
                     </td>
-                    {row.cells.map((status, i) => (
-                      <td key={i} className={`${tdCls} text-center`}>
-                        <Cell status={status} />
-                      </td>
-                    ))}
+                    {row.cells.map((status, i) => {
+                      const s = loadSessions[i];
+                      return (
+                        <td key={i} className={`${tdCls} text-center`}>
+                          <Link
+                            href={`/belasting?datum=${s.date}&type=${s.sessionType}#sessie-invoeren`}
+                            className="inline-block rounded-full hover:opacity-70"
+                            title={`Naar invulformulier — ${s.sessionType === "training" ? "Training" : "Wedstrijd"} ${formatDateShort(s.date)}`}
+                          >
+                            <Cell status={status} />
+                          </Link>
+                        </td>
+                      );
+                    })}
                     <td className={`${tdCls} text-center`}>
                       {row.missing === 0 ? (
                         <Badge color="green">0</Badge>
@@ -290,6 +299,7 @@ export default function InvoerOverzichtPage() {
                 ))}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-slate-500">Klik op een cel om direct naar het invulformulier voor die sessie te gaan.</p>
           </div>
         )}
       </Card>
@@ -330,11 +340,20 @@ export default function InvoerOverzichtPage() {
                         {row.player.name}
                       </Link>
                     </td>
-                    {row.cells.map((status, i) => (
-                      <td key={i} className={`${tdCls} text-center`}>
-                        <Cell status={status} />
-                      </td>
-                    ))}
+                    {row.cells.map((status, i) => {
+                      const m = playedMatches[i];
+                      return (
+                        <td key={i} className={`${tdCls} text-center`}>
+                          <Link
+                            href={`/resultaten?match=${m.id}#zelfreflecties`}
+                            className="inline-block rounded-full hover:opacity-70"
+                            title={`Naar wedstrijdreview — ${formatDateShort(m.date)} vs ${m.opponent}`}
+                          >
+                            <Cell status={status} />
+                          </Link>
+                        </td>
+                      );
+                    })}
                     <td className={`${tdCls} text-center`}>
                       {row.missing === 0 ? (
                         <Badge color="green">0</Badge>
@@ -346,6 +365,7 @@ export default function InvoerOverzichtPage() {
                 ))}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-slate-500">Klik op een cel om direct naar de wedstrijdreview te gaan.</p>
           </div>
         )}
       </Card>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
@@ -68,8 +69,20 @@ function addDaysIso(iso: string, days: number): string {
 }
 
 export default function BelastingPage() {
+  return (
+    <Suspense fallback={<p className="text-slate-500">Laden…</p>}>
+      <BelastingPageInner />
+    </Suspense>
+  );
+}
+
+function BelastingPageInner() {
   const canEdit = useCanEdit();
   const role = useRole();
+  const searchParams = useSearchParams();
+  const presetDate = searchParams.get("datum");
+  const presetType = searchParams.get("type") === "wedstrijd" ? "wedstrijd" : "training";
+  const [presetApplied, setPresetApplied] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [entries, setEntries] = useState<LoadEntry[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -170,6 +183,20 @@ export default function BelastingPage() {
     setDate(newDate);
     setDrafts(buildDrafts(newDate, sessionType));
   }
+
+  // Vanaf het invuloverzicht kun je op een cel klikken om direct hier uit te
+  // komen met de juiste datum/type al klaargezet — alleen toepassen als de
+  // data eenmaal geladen is (buildDrafts heeft entries/absences nodig) en
+  // maar één keer, anders overschrijft dit een latere handmatige keuze.
+  useEffect(() => {
+    if (loading || presetApplied || !presetDate) return;
+    setAgendaChoice("");
+    setDate(presetDate);
+    setSessionType(presetType);
+    setDrafts(buildDrafts(presetDate, presetType));
+    setPresetApplied(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   function applySessionType(newSessionType: "training" | "wedstrijd") {
     setSessionType(newSessionType);
@@ -578,6 +605,7 @@ export default function BelastingPage() {
       )}
 
       {canEdit && (
+      <div id="sessie-invoeren">
       <Card className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold">Sessie invoeren (staf)</h2>
@@ -691,6 +719,7 @@ export default function BelastingPage() {
         </div>
         <Message text={msg} error={err} />
       </Card>
+      </div>
       )}
 
       <Card>
