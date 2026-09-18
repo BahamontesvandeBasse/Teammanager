@@ -8,7 +8,6 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 import { formatDateShort, isoWeek, todayIso } from "@/lib/format";
-import { playerAbsenceStatus } from "@/lib/absence";
 import { injurySeverityColor, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, inputCls, tdCls, thCls } from "@/components/ui";
 import { Absence, LoadEntry, Match, Player, ScheduleItem } from "@/lib/types";
@@ -334,7 +333,7 @@ function BelastingPageInner() {
   }, [entries]);
 
   // Rollend 7-daags venster t.o.v. vandaag, om acute stijgingen in belasting te signaleren.
-  // Plus de laatste weken als trend (voor de sparkline) en een advies voor de komende training.
+  // Plus de laatste weken als trend (voor de sparkline) en een fitheidsstatus van de speler.
   const teamOverview = useMemo(() => {
     const today = todayIso();
     const daysAgo = (iso: string) =>
@@ -376,56 +375,55 @@ function BelastingPageInner() {
         // Schaal is net als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht herstel.
         const lowRecovery = !!latest?.fatigue && latest.fatigue >= 7;
 
-        const absenceStatus = playerAbsenceStatus(p.id, absences, today);
         // "licht" (kan gewoon mee spelen/trainen) mag het advies niet overrulen — anders
         // wordt elk klein pijntje behandeld als serieuze blessure. Onbekende ernst (oudere
         // rijen van vóór dit veld) blijft voorzichtigheidshalve "ernstig".
         const injurySeverity = latest?.injury_flag ? latest.injury_severity ?? "ernstig" : null;
 
+        // Dit gaat over de fitheid van de speler (herstel/belastingopbouw), niet over
+        // of hij aanwezig is voor de komende sessie — een afmelding (blessure, stage,
+        // studiekamp...) hoort al bij Afwezigheid/Programma en overrult dit dus niet.
         let risk: "red" | "amber" | "green" | "slate" = "slate";
-        let advice = "❔ Nog geen data";
-        if (absenceStatus?.kind === "current") {
+        let fitness = "❔ Nog geen data";
+        if (injurySeverity === "ernstig") {
           risk = "red";
-          advice = `🚫 Niet inzetbaar${absenceStatus.absence.reason ? ` — ${absenceStatus.absence.reason}` : " — afwezig"}`;
-        } else if (injurySeverity === "ernstig") {
-          risk = "red";
-          advice = "🚑 Rustig aan — blessure gemeld";
+          fitness = "🚑 Geblesseerd (ernstig)";
         } else if (injurySeverity === "matig") {
           risk = "amber";
-          advice = "🩹 Aangepast programma — matige blessure gemeld";
+          fitness = "🩹 Geblesseerd (matig)";
         } else if (thisWeek === 0 && prevWeek === 0) {
           risk = "slate";
-          advice = "❔ Nog geen data";
+          fitness = "❔ Nog geen data";
         } else if (lowRecovery) {
           risk = "red";
-          advice = "😴 Lichtere training — laag herstel";
+          fitness = "😴 Laag herstel";
         } else if (change > 30) {
           risk = "red";
-          advice = "⚠️ Rustiger programma — belasting steeg sterk";
+          fitness = "⚠️ Belasting sterk gestegen";
         } else if (change > 15) {
           risk = "amber";
-          advice = "🟡 Normaal, in de gaten houden";
+          fitness = "🟡 Belasting licht gestegen";
         } else if (change < -20) {
           risk = "green";
-          advice = "🟢 Ruimte om intensiteit op te bouwen";
+          fitness = "🟢 Fit — ruimte voor meer belasting";
         } else {
           risk = "green";
-          advice = "✅ Normale intensiteit";
+          fitness = "✅ Fit — belasting stabiel";
         }
 
-        // Lichte klacht: geen impact op het advies zelf, maar wel zichtbaar als notitie.
+        // Lichte klacht: geen impact op de fitheidsstatus zelf, maar wel zichtbaar als notitie.
         if (injurySeverity === "licht" && risk !== "red") {
-          advice = `${advice} · 🩹 lichte klacht gemeld`;
+          fitness = `${fitness} · 🩹 lichte klacht gemeld`;
         }
 
-        return { player: p, change, risk, advice, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
+        return { player: p, change, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
       })
       .sort((a, b) => {
         const order = { red: 0, amber: 1, green: 2, slate: 3 };
         if (order[a.risk] !== order[b.risk]) return order[a.risk] - order[b.risk];
         return b.change - a.change;
       });
-  }, [activePlayers, entries, latestByPlayer, absences]);
+  }, [activePlayers, entries, latestByPlayer]);
 
   function toggleSelectedPlayer(id: string) {
     setSelectedPlayerIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -565,7 +563,7 @@ function BelastingPageInner() {
         <Card className="mb-6">
           <h2 className="mb-1 font-semibold">Team overzicht</h2>
           <p className="mb-3 text-xs text-slate-500">
-            Trend in belasting per speler (laatste weken), een advies voor de komende training, en de seizoenstotalen.
+            Trend in belasting per speler (laatste weken), de fitheidsstatus op basis van herstel/belastingopbouw, en de seizoenstotalen.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -573,7 +571,7 @@ function BelastingPageInner() {
                 <tr className="border-b border-slate-200">
                   <th className={thCls}>Speler</th>
                   <th className={thCls}>Trend</th>
-                  <th className={thCls}>Advies komende training</th>
+                  <th className={thCls}>Fitheid</th>
                   <th className={thCls}>Sessies</th>
                   <th className={thCls}>Gem. RPE</th>
                   <th className={thCls}>Totale belasting</th>
@@ -581,14 +579,14 @@ function BelastingPageInner() {
                 </tr>
               </thead>
               <tbody>
-                {teamOverview.map(({ player, risk, advice, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries }) => (
+                {teamOverview.map(({ player, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries }) => (
                   <tr key={player.id} className="border-b border-slate-100">
                     <td className={`${tdCls} font-medium`}>{player.name}</td>
                     <td className={tdCls}>
                       <Sparkline values={trend} color={risk} />
                     </td>
                     <td className={tdCls}>
-                      <Badge color={risk}>{advice}</Badge>
+                      <Badge color={risk}>{fitness}</Badge>
                     </td>
                     <td className={tdCls}>{seasonSessions}</td>
                     <td className={tdCls}>{seasonAvgRpe !== null ? seasonAvgRpe.toFixed(1) : "—"}</td>
