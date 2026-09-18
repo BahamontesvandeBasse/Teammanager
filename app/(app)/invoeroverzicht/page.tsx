@@ -135,12 +135,80 @@ export default function InvoerOverzichtPage() {
     })
     .sort((a, b) => b.missing - a.missing || a.player.name.localeCompare(b.player.name, "nl"));
 
+  // Per-sessie actielijst: alleen sessies waar nog iemand op ontbreekt, met de
+  // namen erbij — dit is het scherm om na een training/wedstrijd snel te zien
+  // wie je nog moet aanspreken, in plaats van dat per speler te moeten uitzoeken.
+  type SessionGap = { date: string; icon: string; title: string; kind: "Belasting" | "Wedstrijdreview"; missingPlayers: Player[] };
+  const loadGaps: SessionGap[] = loadSessions
+    .map((s) => {
+      const missingPlayers = activePlayers.filter(
+        (p) => loadCellStatus(p.id, s.date, s.sessionType, loadEntries, absences) === "missing"
+      );
+      const match = s.sessionType === "wedstrijd" ? matches.find((m) => m.date === s.date) : undefined;
+      return {
+        date: s.date,
+        icon: s.sessionType === "training" ? "🎯" : "⚽",
+        title: s.sessionType === "training" ? "Training" : `Wedstrijd${match ? ` vs ${match.opponent}` : ""}`,
+        kind: "Belasting" as const,
+        missingPlayers,
+      };
+    })
+    .filter((g) => g.missingPlayers.length > 0);
+
+  const reviewGaps: SessionGap[] = playedMatches
+    .map((m) => ({
+      date: m.date,
+      icon: "📝",
+      title: `Wedstrijdreview vs ${m.opponent}`,
+      kind: "Wedstrijdreview" as const,
+      missingPlayers: activePlayers.filter(
+        (p) => reflectionCellStatus(p.id, m, reflections, loadEntries, absences) === "missing"
+      ),
+    }))
+    .filter((g) => g.missingPlayers.length > 0);
+
+  const sessionGaps = [...loadGaps, ...reviewGaps].sort((a, b) => b.date.localeCompare(a.date));
+  const totalGapItems = sessionGaps.reduce((sum, g) => sum + g.missingPlayers.length, 0);
+
   return (
     <div>
       <PageTitle
         title="Invuloverzicht"
-        subtitle={`Wie heeft belasting en wedstrijdreviews wel/niet ingevuld — belasting toont de laatste ${MISSING_LOAD_WINDOW_DAYS} dagen, reviews alle gespeelde wedstrijden dit seizoen.`}
+        subtitle={`Wie heeft belasting en wedstrijdreviews wel/niet ingevuld. Bovenaan alleen de openstaande sessies per speler, daaronder het volledige overzicht — belasting toont de laatste ${MISSING_LOAD_WINDOW_DAYS} dagen, reviews alle gespeelde wedstrijden dit seizoen.`}
       />
+
+      <Card className="mb-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Openstaande invoer per sessie</h2>
+          {totalGapItems > 0 && <Badge color="red">{totalGapItems} openstaand</Badge>}
+        </div>
+        {sessionGaps.length === 0 ? (
+          <p className="text-sm text-slate-500">🎉 Alles is ingevuld — niemand mist nog belasting of een wedstrijdreview.</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {sessionGaps.map((g) => (
+              <div key={`${g.kind}|${g.date}|${g.title}`} className="flex flex-wrap items-start gap-3 py-2.5">
+                <span className="w-24 shrink-0 text-sm text-slate-500">{formatDateShort(g.date)}</span>
+                <span className="w-8 shrink-0 text-center" aria-hidden>{g.icon}</span>
+                <div className="min-w-[160px] flex-1">
+                  <div className="text-sm font-medium text-slate-800">
+                    {g.title} <span className="font-normal text-slate-400">· {g.kind}</span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-x-1 text-sm text-slate-600">
+                    {g.missingPlayers.map((p, i) => (
+                      <span key={p.id}>
+                        <Link href={`/spelers/${p.id}`} className="hover:text-rose-600 hover:underline">{p.name}</Link>
+                        {i < g.missingPlayers.length - 1 ? "," : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Badge color="red">{g.missingPlayers.length}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card className="mb-6">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
