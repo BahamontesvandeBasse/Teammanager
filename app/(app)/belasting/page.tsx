@@ -341,11 +341,11 @@ function BelastingPageInner() {
 
     return activePlayers
       .map((p) => {
-        let thisWeek = 0;
-        let prevWeek = 0;
+        let acuteLoad = 0; // laatste 7 dagen
+        let chronicLoad = 0; // laatste 28 dagen (incl. de acute week)
         const byWeek = new Map<string, number>();
-        // Seizoenstotalen: los van het rollende 7-daagse venster hierboven, telt
-        // gewoon alles mee wat ooit is ingevoerd voor deze speler.
+        // Seizoenstotalen: los van de rollende vensters hierboven, telt gewoon
+        // alles mee wat ooit is ingevoerd voor deze speler.
         let seasonSessions = 0;
         let seasonRpeSum = 0;
         let seasonLoad = 0;
@@ -356,8 +356,8 @@ function BelastingPageInner() {
           if (e.absent) continue;
           const age = daysAgo(e.date);
           const load = (e.minutes ?? 0) * (e.rpe ?? 0);
-          if (age >= 0 && age <= 6) thisWeek += load;
-          else if (age >= 7 && age <= 13) prevWeek += load;
+          if (age >= 0 && age <= 6) acuteLoad += load;
+          if (age >= 0 && age <= 27) chronicLoad += load;
           const w = isoWeek(e.date);
           byWeek.set(w, (byWeek.get(w) ?? 0) + load);
           seasonSessions++;
@@ -370,7 +370,14 @@ function BelastingPageInner() {
           .map(([, load]) => load);
         const seasonAvgRpe = seasonSessions > 0 ? seasonRpeSum / seasonSessions : null;
 
-        const change = prevWeek > 0 ? ((thisWeek - prevWeek) / prevWeek) * 100 : thisWeek > 0 ? 100 : 0;
+        // ACWR (acute:chronic workload ratio) — acute belasting van de afgelopen week
+        // t.o.v. het 4-weeks gemiddelde per week. Gevestigde sportwetenschap-metriek
+        // (Gabbett e.a.) die blessurerisico bij belastingpieken beter voorspelt dan een
+        // kale week-op-week-vergelijking: 0.8–1.3 is de "sweet spot", >1.5 fors risico.
+        // Zonder 4 weken aan historie (chronicLoad = 0) is de ratio niet betekenisvol.
+        const chronicWeekly = chronicLoad / 4;
+        const acwr = chronicWeekly > 0 ? acuteLoad / chronicWeekly : null;
+
         const latest = latestByPlayer.get(p.id);
         // Schaal is net als RPE: 1 = heel licht, 10 = maximaal — dus hoge waarden zijn slecht herstel.
         const lowRecovery = !!latest?.fatigue && latest.fatigue >= 7;
@@ -391,24 +398,24 @@ function BelastingPageInner() {
         } else if (injurySeverity === "matig") {
           risk = "amber";
           fitness = "🩹 Geblesseerd (matig)";
-        } else if (thisWeek === 0 && prevWeek === 0) {
+        } else if (acwr === null) {
           risk = "slate";
           fitness = "❔ Nog geen data";
         } else if (lowRecovery) {
           risk = "red";
           fitness = "😴 Laag herstel";
-        } else if (change > 30) {
+        } else if (acwr > 1.5) {
           risk = "red";
-          fitness = "⚠️ Belasting sterk gestegen";
-        } else if (change > 15) {
+          fitness = "⚠️ Blessurerisico — belasting piekt";
+        } else if (acwr > 1.3) {
           risk = "amber";
-          fitness = "🟡 Belasting licht gestegen";
-        } else if (change < -20) {
-          risk = "green";
-          fitness = "🟢 Fit — ruimte voor meer belasting";
+          fitness = "🟡 Verhoogd risico — belasting stijgt";
+        } else if (acwr < 0.8) {
+          risk = "amber";
+          fitness = "🔻 Ondertraind t.o.v. gewenning";
         } else {
           risk = "green";
-          fitness = "✅ Fit — belasting stabiel";
+          fitness = "✅ Fit — belasting in sweet spot";
         }
 
         // Lichte klacht: geen impact op de fitheidsstatus zelf, maar wel zichtbaar als notitie.
@@ -416,12 +423,12 @@ function BelastingPageInner() {
           fitness = `${fitness} · 🩹 lichte klacht gemeld`;
         }
 
-        return { player: p, change, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
+        return { player: p, acwr, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries };
       })
       .sort((a, b) => {
         const order = { red: 0, amber: 1, green: 2, slate: 3 };
         if (order[a.risk] !== order[b.risk]) return order[a.risk] - order[b.risk];
-        return b.change - a.change;
+        return (b.acwr ?? 0) - (a.acwr ?? 0);
       });
   }, [activePlayers, entries, latestByPlayer]);
 
@@ -563,7 +570,8 @@ function BelastingPageInner() {
         <Card className="mb-6">
           <h2 className="mb-1 font-semibold">Team overzicht</h2>
           <p className="mb-3 text-xs text-slate-500">
-            Trend in belasting per speler (laatste weken), de fitheidsstatus op basis van herstel/belastingopbouw, en de seizoenstotalen.
+            Trend in belasting per speler (laatste weken), ACWR (acute:chronic workload ratio — 0.8–1.3 is de
+            "sweet spot", hoger betekent een piek in belasting t.o.v. gewenning), de fitheidsstatus, en de seizoenstotalen.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -571,6 +579,7 @@ function BelastingPageInner() {
                 <tr className="border-b border-slate-200">
                   <th className={thCls}>Speler</th>
                   <th className={thCls}>Trend</th>
+                  <th className={thCls}>ACWR</th>
                   <th className={thCls}>Fitheid</th>
                   <th className={thCls}>Sessies</th>
                   <th className={thCls}>Gem. RPE</th>
@@ -579,11 +588,20 @@ function BelastingPageInner() {
                 </tr>
               </thead>
               <tbody>
-                {teamOverview.map(({ player, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries }) => (
+                {teamOverview.map(({ player, acwr, risk, fitness, trend, seasonSessions, seasonAvgRpe, seasonLoad, seasonInjuries }) => (
                   <tr key={player.id} className="border-b border-slate-100">
                     <td className={`${tdCls} font-medium`}>{player.name}</td>
                     <td className={tdCls}>
                       <Sparkline values={trend} color={risk} />
+                    </td>
+                    <td className={tdCls}>
+                      {acwr === null ? (
+                        "—"
+                      ) : (
+                        <Badge color={acwr > 1.5 ? "red" : acwr > 1.3 || acwr < 0.8 ? "amber" : "green"}>
+                          {acwr.toFixed(2)}
+                        </Badge>
+                      )}
                     </td>
                     <td className={tdCls}>
                       <Badge color={risk}>{fitness}</Badge>
