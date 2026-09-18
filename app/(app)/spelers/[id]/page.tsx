@@ -5,7 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { ageFromBirthdate, formatDate, formatDateShort, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
-import { tallyAttendance } from "@/lib/attendance";
+import { isMissingLoadEntry, MISSING_LOAD_WINDOW_DAYS, tallyAttendance } from "@/lib/attendance";
 import { isTrainingActivity } from "@/lib/training";
 import { injurySeverityColor, isSeriousInjury, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, SparklineColor, inputCls, thCls, tdCls } from "@/components/ui";
@@ -443,19 +443,13 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   // Sessies waarvoor deze speler geen belasting heeft ingevuld en ook niet is
   // afgemeld — alleen voor staf zichtbaar, om te zien wie nog moet invullen.
   // Beperkt tot een recent venster, anders groeit dit een heel seizoen lang door.
-  const MISSING_LOAD_WINDOW_DAYS = 30;
   const missingWindowStart = addDaysIso(today, -MISSING_LOAD_WINDOW_DAYS);
-  function isMissingLoad(date: string, sessionType: "training" | "wedstrijd"): boolean {
-    const hasEntry = load.some((l) => l.date === date && l.session_type === sessionType);
-    if (hasEntry) return false;
-    return !absences.some((a) => a.player_id === id && date >= a.from && date <= a.until);
-  }
   const missingSessions = [
     ...trainingDates
-      .filter((d) => d >= missingWindowStart && isMissingLoad(d, "training"))
+      .filter((d) => d >= missingWindowStart && isMissingLoadEntry(id, d, "training", load, absences))
       .map((d) => ({ date: d, sessionType: "training" as const })),
     ...matchDates
-      .filter((d) => d >= missingWindowStart && isMissingLoad(d, "wedstrijd"))
+      .filter((d) => d >= missingWindowStart && isMissingLoadEntry(id, d, "wedstrijd", load, absences))
       .map((d) => ({ date: d, sessionType: "wedstrijd" as const })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 

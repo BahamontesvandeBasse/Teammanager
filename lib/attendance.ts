@@ -15,6 +15,11 @@ export type AttendanceTally = {
 
 export type AttendanceStatus = "present" | "absent" | "period-absent";
 
+// Hoeveel dagen terug we een ontbrekende belasting-invoer nog signaleren aan
+// de staf (spelersprofiel, invuloverzicht) — voorkomt dat de lijst een heel
+// seizoen lang blijft doorgroeien.
+export const MISSING_LOAD_WINDOW_DAYS = 30;
+
 // Status van één speler voor één specifieke sessie: een handmatige invoer/
 // override in load_entries (bv. de sneltoets op Programma) gaat altijd vóór
 // een lopende afwezigheidsperiode — zo kan de staf iemand alsnog aanwezig
@@ -30,6 +35,21 @@ export function attendanceStatusFor(
   const periodAbsent = absences.some((a) => a.player_id === playerId && date >= a.from && date <= a.until);
   const status: AttendanceStatus = entry ? (entry.absent ? "absent" : "present") : periodAbsent ? "period-absent" : "present";
   return { status, entry, periodAbsent };
+}
+
+// Speler heeft voor deze sessie nog geen belasting (RPE/minuten) ingevuld én
+// is er ook niet voor afgemeld — staf moet dit nog navragen/invullen. Gebruikt
+// op zowel het spelersprofiel als het invuloverzicht, zodat beide exact
+// dezelfde definitie van "nog niet ingevuld" hanteren.
+export function isMissingLoadEntry(
+  playerId: string,
+  date: string,
+  sessionType: "training" | "wedstrijd",
+  entries: LoadEntry[],
+  absences: Absence[]
+): boolean {
+  const { entry, periodAbsent } = attendanceStatusFor(playerId, date, sessionType, entries, absences);
+  return !entry && !periodAbsent;
 }
 
 export function tallyAttendance(

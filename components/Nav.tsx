@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { href: "/schema", label: "Was & rijden", icon: "🚗" },
   { href: "/training", label: "Trainingsprogramma", icon: "🎯", hideForSpeler: true },
   { href: "/belasting", label: "Belasting", icon: "❤️", hideForSpeler: true },
+  { href: "/invoeroverzicht", label: "Invuloverzicht", icon: "📝", hideForSpeler: true },
 ];
 
 function isActiveHref(pathname: string, href: string): boolean {
