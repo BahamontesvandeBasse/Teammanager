@@ -6,7 +6,7 @@ import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api } from "@/lib/api";
-import { isoWeek, todayIso } from "@/lib/format";
+import { formatDateShort, isoWeek, todayIso } from "@/lib/format";
 import { playerAbsenceStatus } from "@/lib/absence";
 import { injurySeverityColor, INJURY_SEVERITY_OPTIONS } from "@/lib/loadAdvice";
 import { Badge, Button, Card, Message, PageTitle, Sparkline, inputCls, tdCls, thCls } from "@/components/ui";
@@ -52,13 +52,14 @@ function metricValue(e: LoadEntry, metric: Metric): number | null {
   return e.fatigue;
 }
 
-const WEEK_WINDOW_OPTIONS: { value: string; label: string; weeks: number | null }[] = [
-  { value: "3", label: "Laatste 3 weken", weeks: 3 },
-  { value: "6", label: "Laatste 6 weken", weeks: 6 },
-  { value: "10", label: "Laatste 10 weken", weeks: 10 },
-  { value: "12", label: "Laatste 12 weken", weeks: 12 },
-  { value: "all", label: "Hele seizoen", weeks: null },
+const PERIOD_OPTIONS: { value: string; label: string; days: number | null }[] = [
+  { value: "10", label: "Laatste 10 dagen", days: 10 },
+  { value: "30", label: "Laatste 30 dagen", days: 30 },
+  { value: "60", label: "Laatste 60 dagen", days: 60 },
+  { value: "all", label: "Hele seizoen", days: null },
 ];
+
+type ViewMode = "grafiek" | "tabel";
 
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -81,7 +82,8 @@ export default function BelastingPage() {
   const [agendaChoice, setAgendaChoice] = useState("");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [metric, setMetric] = useState<Metric>("load");
-  const [weekWindow, setWeekWindow] = useState("10");
+  const [period, setPeriod] = useState("30");
+  const [viewMode, setViewMode] = useState<ViewMode>("grafiek");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -418,6 +420,11 @@ export default function BelastingPage() {
   // t.o.v. de rest van het team. Beperkt tot de gekozen periode (laatste N weken).
   const metricAgg = METRIC_OPTIONS.find((m) => m.value === metric)!.agg;
   const metricLabel = METRIC_OPTIONS.find((m) => m.value === metric)!.label;
+  // Eén periode-venster voor zowel de grafiek als de tabel — dagen terug t.o.v.
+  // vandaag, null betekent het hele seizoen (geen ondergrens).
+  const periodDays = PERIOD_OPTIONS.find((o) => o.value === period)?.days ?? null;
+  const periodStart = periodDays === null ? null : addDaysIso(todayIso(), -periodDays);
+
   const chartData = useMemo(() => {
     if (selectedPlayerIds.length === 0) return [];
     const byPlayerWeek = new Map<string, Map<string, { sum: number; count: number }>>();
@@ -425,7 +432,7 @@ export default function BelastingPage() {
     const activeIds = new Set(activePlayers.map((p) => p.id));
     const weeks = new Set<string>();
     entries
-      .filter((e) => !e.absent)
+      .filter((e) => !e.absent && (periodStart === null || e.date >= periodStart))
       .forEach((e) => {
         const value = metricValue(e, metric);
         if (value === null) return;
@@ -448,11 +455,9 @@ export default function BelastingPage() {
         }
       });
 
-    const windowWeeks = WEEK_WINDOW_OPTIONS.find((o) => o.value === weekWindow)?.weeks ?? null;
     const sortedWeeks = [...weeks].sort();
-    const limitedWeeks = windowWeeks === null ? sortedWeeks : sortedWeeks.slice(-windowWeeks);
 
-    return limitedWeeks.map((w) => {
+    return sortedWeeks.map((w) => {
       const row: Record<string, string | number> = { week: w.split("-")[1] };
       for (const id of selectedPlayerIds) {
         const cell = byPlayerWeek.get(id)?.get(w);
@@ -462,7 +467,34 @@ export default function BelastingPage() {
       row[TEAM_AVG_KEY] = teamCell ? Math.round((teamCell.sum / teamCell.count) * 10) / 10 : 0;
       return row;
     });
-  }, [entries, selectedPlayerIds, activePlayers, metric, metricAgg, weekWindow]);
+  }, [entries, selectedPlayerIds, activePlayers, metric, metricAgg, periodStart]);
+
+  // Zelfde spelers-/periodeselectie als de grafiek, maar dan op sessie-niveau
+  // (niet per week samengevoegd) en met de ruwe ingevulde waarde per cel.
+  const tableSessions = useMemo(() => {
+    const map = new Map<string, { date: string; session_type: "training" | "wedstrijd" }>();
+    entries.forEach((e) => {
+      if (!selectedPlayerIds.includes(e.player_id)) return;
+      if (periodStart !== null && e.date < periodStart) return;
+      const key = `${e.date}|${e.session_type}`;
+      if (!map.has(key)) map.set(key, { date: e.date, session_type: e.session_type });
+    });
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }, [entries, selectedPlayerIds, periodStart]);
+
+  const tableRows = selectedPlayerIds.map((id) => ({
+    player: players.find((p) => p.id === id),
+    cells: tableSessions.map((s) =>
+      entries.find((e) => e.player_id === id && e.date === s.date && e.session_type === s.session_type)
+    ),
+  }));
+
+  function tableCellText(entry: LoadEntry | undefined): string {
+    if (!entry) return "–";
+    if (entry.absent) return "afwezig";
+    const v = metricValue(entry, metric);
+    return v === null ? "–" : String(v);
+  }
 
   // Alle sessies (datum + type) waar minstens één invoer voor bestaat, nieuwste eerst —
   // basis voor de sessiekiezer bij de ruwe invoer (corrigeren), los van de speler-selectie
@@ -677,11 +709,28 @@ export default function BelastingPage() {
           </label>
           <label className="text-sm">
             <span className="mb-1 block text-xs text-slate-500">Periode</span>
-            <select className={inputCls} value={weekWindow} onChange={(e) => setWeekWindow(e.target.value)}>
-              {WEEK_WINDOW_OPTIONS.map((o) => (
+            <select className={inputCls} value={period} onChange={(e) => setPeriod(e.target.value)}>
+              {PERIOD_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-slate-500">Weergave</span>
+            <div className="flex overflow-hidden rounded-lg border border-slate-300">
+              {(["grafiek", "tabel"] as ViewMode[]).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setViewMode(v)}
+                  className={`px-3 py-1.5 text-sm font-medium capitalize ${
+                    viewMode === v ? "bg-rose-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           </label>
         </div>
         <div className="mb-4">
@@ -721,11 +770,14 @@ export default function BelastingPage() {
           </div>
         </div>
 
-        {selectedPlayerIds.length > 0 && chartData.length === 0 && (
+        {selectedPlayerIds.length === 0 && (
+          <p className="text-sm text-slate-500">Kies hierboven één of meerdere spelers.</p>
+        )}
+        {selectedPlayerIds.length > 0 && viewMode === "grafiek" && chartData.length === 0 && (
           <p className="text-sm text-slate-500">Nog geen invoer voor de gekozen speler(s) in deze periode.</p>
         )}
 
-        {chartData.length > 0 && (
+        {viewMode === "grafiek" && chartData.length > 0 && (
           <>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -766,6 +818,44 @@ export default function BelastingPage() {
               {metric === "load" && " Let op grote sprongen (>30% stijging week-op-week) — die verhogen blessurerisico."}
             </p>
           </>
+        )}
+
+        {viewMode === "tabel" && tableSessions.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className={`${thCls} sticky left-0 bg-white`}>Speler</th>
+                  {tableSessions.map((s) => (
+                    <th key={`${s.date}|${s.session_type}`} className={`${thCls} whitespace-nowrap text-center`}>
+                      <div>{formatDateShort(s.date)}</div>
+                      <div className="text-[10px] font-normal normal-case text-slate-400">
+                        {s.session_type === "training" ? "🎯" : "⚽"}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map(({ player, cells }) =>
+                  player ? (
+                    <tr key={player.id} className="border-b border-slate-100">
+                      <td className={`${tdCls} sticky left-0 bg-white font-medium`}>{player.name}</td>
+                      {cells.map((entry, i) => (
+                        <td key={i} className={`${tdCls} text-center ${entry?.absent ? "text-slate-400" : ""}`}>
+                          {tableCellText(entry)}
+                        </td>
+                      ))}
+                    </tr>
+                  ) : null
+                )}
+              </tbody>
+            </table>
+            <p className="mt-2 text-xs text-slate-500">{metricLabel} per sessie — "afwezig" als er een afmelding is ingevuld, "–" als er nog niets is ingevuld.</p>
+          </div>
+        )}
+        {viewMode === "tabel" && selectedPlayerIds.length > 0 && tableSessions.length === 0 && (
+          <p className="text-sm text-slate-500">Nog geen invoer voor de gekozen speler(s) in deze periode.</p>
         )}
 
         {sessionOptions.length > 0 && (
