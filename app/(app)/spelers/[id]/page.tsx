@@ -402,7 +402,19 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   }
   if (!hasContribution) minutesSinceContribution = totals.minutes;
 
-  const recentLoad = load.slice(0, 10);
+  const today = todayIso();
+
+  // Invoer voor een sessie die nog moet komen (bv. vooraf aanwezig gezet via
+  // Programma) hoort nog niet in de belastinghistorie, en invoer voor een datum
+  // waarop (inmiddels) geen training/wedstrijd meer gepland staat — bv. een
+  // verplaatste wedstrijd — ook niet.
+  const plannedSessionKeys = new Set([
+    ...scheduleItems.filter((i) => isTrainingActivity(i.activity)).map((i) => `${i.date}|training`),
+    ...matches.map((m) => `${m.date}|wedstrijd`),
+  ]);
+  const recentLoad = load
+    .filter((l) => l.date <= today && plannedSessionKeys.has(`${l.date}|${l.session_type}`))
+    .slice(0, 10);
   const injuryFlags = recentLoad.filter((l) => l.injury_flag);
   // Alleen matig/ernstig (of onbekende ernst) telt mee als waarschuwing — een lichte
   // klacht ("kan gewoon mee") hoeft de sparkline niet rood te kleuren.
@@ -427,8 +439,6 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
   const loadColor: SparklineColor =
     seriousInjuries.length > 0 || lowRecovery ? "red" : loadTrend.length > 0 ? "green" : "slate";
   const videoLinkById = new Map(videoLinks.map((v) => [v.id, v]));
-
-  const today = todayIso();
 
   // Alleen data meetellen op dagen die ook echt een geplande training/wedstrijd waren —
   // anders kan een per ongeluk dubbel of los ingevoerde belasting-registratie de teller
@@ -910,7 +920,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
             <p className="text-sm text-slate-500">Nog geen wedstrijdstatistieken.</p>
           ) : (
             <div className="flex flex-col gap-1 text-sm">
-              {stats.map((s) => {
+              {[...stats]
+                .sort((a, b) => (matchById.get(b.match_id)?.date ?? "").localeCompare(matchById.get(a.match_id)?.date ?? ""))
+                .map((s) => {
                 const m = matchById.get(s.match_id);
                 return (
                   <div key={s.id} className="flex items-center justify-between border-b border-slate-100 py-1">
@@ -986,6 +998,9 @@ export default function PlayerProfilePage({ params }: { params: Promise<{ id: st
                   </div>
                   {l.absent ? (
                     <div className="text-xs text-slate-500">Afwezig</div>
+                  ) : l.minutes == null && l.rpe == null ? (
+                    // Alleen aanwezig gezet (sneltoets op Programma), nog geen belasting ingevuld.
+                    <div className="text-xs text-slate-500">Aanwezig — nog geen belasting ingevuld</div>
                   ) : (
                     <div className="text-xs text-slate-500">
                       {l.minutes} min · RPE {l.rpe} · vermoeidheid {l.fatigue}/10
