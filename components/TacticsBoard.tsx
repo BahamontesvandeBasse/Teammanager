@@ -77,6 +77,75 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(w / 2 - goalMouth / 2, h - 10, goalMouth, goalDepth);
 }
 
+type Pt = { x: number; y: number };
+
+function midpoint(a: Pt, b: Pt): Pt {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function bezierPoint(a: Pt, control: Pt, b: Pt, t: number): Pt {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * a.x + 2 * mt * t * control.x + t * t * b.x,
+    y: mt * mt * a.y + 2 * mt * t * control.y + t * t * b.y,
+  };
+}
+
+// Punten langs het (evt. gebogen) pad tussen begin en eind van een pass/looplijn/
+// dribbel — gebruikt voor zowel het tekenen als de klik-detectie, zodat je altijd
+// raakt waar de lijn ook zichtbaar loopt.
+function curvedPathPoints(a: Pt, b: Pt, control: Pt, segs = 16): Pt[] {
+  const pts: Pt[] = [];
+  for (let i = 0; i <= segs; i++) pts.push(bezierPoint(a, control, b, i / segs));
+  return pts;
+}
+
+// Het pad van een lijn-element zoals het getekend/geraakt moet worden: vrije hand
+// blijft de ruwe puntenreeks, de andere stijlen volgen een kwadratische bézier
+// tussen begin en eind met `bend` (of het midden, als er niet gebogen is) als
+// stuurpunt.
+function renderPathPoints(el: Extract<DrawingElement, { kind: "line" }>): Pt[] {
+  if (el.style === "freehand" || el.points.length < 2) return el.points;
+  const a = el.points[0];
+  const b = el.points[el.points.length - 1];
+  const control = el.bend ?? midpoint(a, b);
+  return curvedPathPoints(a, b, control, 16);
+}
+
+// Posities van de drie sleep-handles (begin, eind, buigpunt) van een geselecteerde
+// lijn — null voor vrije hand, die geen begin/eind/buiging-model heeft.
+function lineHandlePositions(el: Extract<DrawingElement, { kind: "line" }>): { start: Pt; end: Pt; bend: Pt } | null {
+  if (el.style === "freehand" || el.points.length < 2) return null;
+  const a = el.points[0];
+  const b = el.points[el.points.length - 1];
+  return { start: a, end: b, bend: el.bend ?? midpoint(a, b) };
+}
+
+const HANDLE_HIT_R = 12;
+
+function drawLineHandles(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "line" }>) {
+  const h = lineHandlePositions(el);
+  if (!h) return;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  [h.start, h.end].forEach((p) => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "white";
+    ctx.fill();
+    ctx.strokeStyle = "#eab308";
+    ctx.stroke();
+  });
+  ctx.beginPath();
+  ctx.arc(h.bend.x, h.bend.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = "#eab308";
+  ctx.fill();
+  ctx.strokeStyle = "white";
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawArrowHead(ctx: CanvasRenderingContext2D, a: { x: number; y: number }, b: { x: number; y: number }) {
   const angle = Math.atan2(b.y - a.y, b.x - a.x);
   const headLen = 12;
@@ -90,6 +159,7 @@ function drawArrowHead(ctx: CanvasRenderingContext2D, a: { x: number; y: number 
 
 function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "line" }>, selected?: boolean) {
   if (el.points.length === 0) return;
+  const pathPts = renderPathPoints(el);
 
   if (selected) {
     // Brede gele halo onder de lijn, zodat een geselecteerde looplijn/pass
@@ -101,7 +171,7 @@ function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { k
     ctx.lineJoin = "round";
     ctx.setLineDash([]);
     ctx.beginPath();
-    el.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    pathPts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.stroke();
     ctx.restore();
   }
@@ -115,7 +185,7 @@ function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { k
 
   if (el.style === "freehand") {
     ctx.beginPath();
-    el.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    pathPts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.stroke();
     ctx.setLineDash([]);
     return;
@@ -127,32 +197,35 @@ function drawLine(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { k
   }
   const a = el.points[0];
   const b = el.points[el.points.length - 1];
+  const control = el.bend ?? midpoint(a, b);
 
   if (el.style === "dribble") {
-    const segs = 8;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
+    const base = curvedPathPoints(a, b, control, 8);
+    const segs = base.length - 1;
     const amp = 6;
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    for (let i = 1; i < segs; i++) {
-      const t = i / segs;
+    base.forEach((p, i) => {
+      const prev = base[Math.max(0, i - 1)];
+      const next = base[Math.min(segs, i + 1)];
+      const tx = next.x - prev.x;
+      const ty = next.y - prev.y;
+      const tl = Math.hypot(tx, ty) || 1;
+      const nx = -ty / tl;
+      const ny = tx / tl;
       const side = i % 2 === 0 ? 1 : -1;
-      ctx.lineTo(a.x + dx * t + nx * amp * side, a.y + dy * t + ny * amp * side);
-    }
-    ctx.lineTo(b.x, b.y);
+      const off = i === 0 || i === segs ? 0 : amp * side;
+      const x = p.x + nx * off;
+      const y = p.y + ny * off;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
     ctx.stroke();
   } else {
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    pathPts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.stroke();
   }
   ctx.setLineDash([]);
-  drawArrowHead(ctx, a, b);
+  drawArrowHead(ctx, control, b);
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, el: Extract<DrawingElement, { kind: "player" }>, selected?: boolean) {
@@ -242,6 +315,8 @@ function renderBoard(canvas: HTMLCanvasElement, elements: DrawingElement[], sele
   drawPitch(ctx);
   elements.forEach((el, i) => drawElement(ctx, el, i === selectedIndex));
   if (preview) drawElement(ctx, preview);
+  const selectedEl = selectedIndex != null ? elements[selectedIndex] : null;
+  if (selectedEl?.kind === "line") drawLineHandles(ctx, selectedEl);
 }
 
 const LINE_HIT_TOLERANCE = 10;
@@ -272,7 +347,7 @@ function findElementAt(elements: DrawingElement[], p: { x: number; y: number }):
   for (let i = elements.length - 1; i >= 0; i--) {
     const el = elements[i];
     if (el.kind === "line") {
-      if (distanceToLine(p, el.points) <= LINE_HIT_TOLERANCE) return i;
+      if (distanceToLine(p, renderPathPoints(el)) <= LINE_HIT_TOLERANCE) return i;
       continue;
     }
     const r = el.kind === "ball" ? BALL_R : TOKEN_R;
@@ -308,6 +383,8 @@ export function TacticsBoardEditor({
   const drag = useRef<
     | { kind: "line"; current: Extract<DrawingElement, { kind: "line" }> }
     | { kind: "move"; index: number; offsetX: number; offsetY: number }
+    | { kind: "lineMove"; index: number; anchor: Pt; startPoints: Pt[]; startBend: Pt | null }
+    | { kind: "lineHandle"; index: number; handle: "start" | "end" | "bend" }
     | null
   >(null);
 
@@ -328,13 +405,42 @@ export function TacticsBoardEditor({
     const p = pointFromEvent(e);
     (e.target as Element).setPointerCapture(e.pointerId);
 
+    // Eerst checken of er op een sleep-handle (begin/eind/buiging) van de al
+    // geselecteerde lijn wordt geklikt — die gaat vóór het gewone hit-testen.
+    if (selectedIndex !== null) {
+      const selEl = elements[selectedIndex];
+      const h = selEl?.kind === "line" ? lineHandlePositions(selEl) : null;
+      if (h) {
+        const handle: "start" | "end" | "bend" | null =
+          Math.hypot(p.x - h.start.x, p.y - h.start.y) <= HANDLE_HIT_R
+            ? "start"
+            : Math.hypot(p.x - h.end.x, p.y - h.end.y) <= HANDLE_HIT_R
+              ? "end"
+              : Math.hypot(p.x - h.bend.x, p.y - h.bend.y) <= HANDLE_HIT_R
+                ? "bend"
+                : null;
+        if (handle) {
+          drag.current = { kind: "lineHandle", index: selectedIndex, handle };
+          return;
+        }
+      }
+    }
+
     const hit = findElementAt(elements, p);
     if (hit !== null) {
       const el = elements[hit];
       setSelectedIndex(hit);
-      // Lijnen (pass/looplijn/dribbel/vrij tekenen) zijn alleen te selecteren
-      // en verwijderen, niet te verslepen — alleen spelers/bal hebben een x/y.
-      if (el.kind !== "line") {
+      if (el.kind === "line") {
+        // Lijn als geheel verslepen — begin/eind/buiging individueel verplaatsen
+        // gaat via de handles hierboven, zodra de lijn geselecteerd is.
+        drag.current = {
+          kind: "lineMove",
+          index: hit,
+          anchor: p,
+          startPoints: el.points.map((pt) => ({ ...pt })),
+          startBend: el.bend ? { ...el.bend } : null,
+        };
+      } else {
         drag.current = { kind: "move", index: hit, offsetX: p.x - el.x, offsetY: p.y - el.y };
       }
       return;
@@ -364,6 +470,37 @@ export function TacticsBoardEditor({
     if (d.kind === "move") {
       onChange(
         elements.map((el, i) => (i === d.index && el.kind !== "line" ? { ...el, x: p.x - d.offsetX, y: p.y - d.offsetY } : el))
+      );
+      return;
+    }
+
+    if (d.kind === "lineMove") {
+      const dx = p.x - d.anchor.x;
+      const dy = p.y - d.anchor.y;
+      onChange(
+        elements.map((el, i) =>
+          i === d.index && el.kind === "line"
+            ? {
+                ...el,
+                points: d.startPoints.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
+                bend: d.startBend ? { x: d.startBend.x + dx, y: d.startBend.y + dy } : el.bend,
+              }
+            : el
+        )
+      );
+      return;
+    }
+
+    if (d.kind === "lineHandle") {
+      onChange(
+        elements.map((el, i) => {
+          if (i !== d.index || el.kind !== "line") return el;
+          if (d.handle === "bend") return { ...el, bend: p };
+          const points = el.points.map((pt) => ({ ...pt }));
+          if (d.handle === "start") points[0] = p;
+          else points[points.length - 1] = p;
+          return { ...el, points };
+        })
       );
       return;
     }
@@ -516,11 +653,13 @@ export function TacticsBoardEditor({
       </div>
 
       <p className="mb-2 text-xs text-slate-500">
-        {mode === "player_own" || mode === "player_opponent"
-          ? "Klik op het veld om een speler te plaatsen. Klik een geplaatste speler aan om een rugnummer te geven of te verslepen."
-          : mode === "ball"
-            ? "Klik op het veld om de bal te plaatsen."
-            : "Sleep over het veld om te tekenen."}
+        {selectedEl?.kind === "line" && selectedEl.style !== "freehand"
+          ? "Sleep de lijn zelf om hem als geheel te verschuiven, of de gele bolletjes om begin, eind of de buiging te verplaatsen."
+          : mode === "player_own" || mode === "player_opponent"
+            ? "Klik op het veld om een speler te plaatsen. Klik een geplaatste speler aan om een rugnummer te geven of te verslepen."
+            : mode === "ball"
+              ? "Klik op het veld om de bal te plaatsen."
+              : "Sleep over het veld om te tekenen."}
       </p>
 
       <canvas
