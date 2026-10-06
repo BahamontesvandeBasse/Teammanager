@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import { formatDate, formatDateShort } from "@/lib/format";
+import { formatDate, formatDateShort, todayIso } from "@/lib/format";
 import { computeMatchTimes } from "@/lib/schedule";
 import { injurySeverityColor } from "@/lib/loadAdvice";
 import { attendanceStatusFor } from "@/lib/attendance";
@@ -81,6 +81,12 @@ const LINES: { key: Line; label: string }[] = [
 
 function isPlayed(m: Match): boolean {
   return m.score_for !== null && m.score_against !== null;
+}
+
+// Wedstrijd is live gestart maar nog niet afgefloten (zie /wedstrijden/live/[id]).
+function isLive(m: Match): boolean {
+  const phase = m.live_clock?.phase;
+  return phase === "h1" || phase === "ht" || phase === "h2";
 }
 
 function emptyMomentNotes(): TacticalMomentNotes {
@@ -226,10 +232,10 @@ function WedstrijdenPageInner() {
   const usedPlayerIds = new Set(Object.values(slotAssignments));
   const filledCount = Object.keys(slotAssignments).length;
   const upcomingMatches = [...matches]
-    .filter((m) => !isPlayed(m))
+    .filter((m) => !isPlayed(m) || isLive(m))
     .sort((a, b) => `${a.date} ${a.kickoff_time}`.localeCompare(`${b.date} ${b.kickoff_time}`));
   const playedMatchesList = [...matches]
-    .filter(isPlayed)
+    .filter((m) => isPlayed(m) && !isLive(m))
     .sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`));
 
   function applyPreparation(prep: MatchPreparation | undefined) {
@@ -498,7 +504,8 @@ function WedstrijdenPageInner() {
         <div className="mb-1 flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-slate-500">{formatDateShort(m.date)} · {m.kickoff_time}</span>
           <div className="flex items-center gap-1">
-            {isNext && <Badge color="amber">eerstvolgende</Badge>}
+            {isLive(m) && <Badge color="red">● live</Badge>}
+            {isNext && !isLive(m) && <Badge color="amber">eerstvolgende</Badge>}
             <Badge color={m.home_away === "home" ? "green" : "blue"}>
               {m.home_away === "home" ? "Thuis" : "Uit"}
             </Badge>
@@ -567,6 +574,7 @@ function WedstrijdenPageInner() {
     .sort((a, b) => `${b.date} ${b.kickoff_time}`.localeCompare(`${a.date} ${a.kickoff_time}`));
 
   const selectedIsPlayed = selected ? isPlayed(selected) : false;
+  const liveCandidate = matches.find(isLive) ?? upcomingMatches[0];
   const times = selected ? computeMatchTimes(selected, clubs) : null;
   const selectedStats = selected ? matchStats.filter((s) => s.match_id === selected.id) : [];
   const selectedLoad = selected ? loadEntries.filter((e) => e.date === selected.date) : [];
@@ -592,6 +600,24 @@ function WedstrijdenPageInner() {
 
       <Card className="mb-6">
         <h2 className="mb-3 font-semibold">Nog te spelen</h2>
+        {liveCandidate && (
+          <Link
+            href={`/wedstrijden/live/${liveCandidate.id}`}
+            className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-4 py-3 text-white shadow hover:bg-slate-800"
+          >
+            <span className="min-w-0">
+              <span className="block text-xs font-medium uppercase tracking-wide text-slate-300">
+                {isLive(liveCandidate) ? "● Wedstrijd is bezig" : liveCandidate.date === todayIso() ? "Vandaag" : formatDateShort(liveCandidate.date)} · {liveCandidate.kickoff_time}
+              </span>
+              <span className="block truncate font-semibold">
+                {liveCandidate.home_away === "away" ? `${liveCandidate.opponent} — Steenwijkerwold` : `Steenwijkerwold — ${liveCandidate.opponent}`}
+              </span>
+            </span>
+            <span className="shrink-0 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold">
+              {isLive(liveCandidate) ? "Open live →" : "▶ Start live"}
+            </span>
+          </Link>
+        )}
         {upcomingMatches.length === 0 ? (
           <p className="text-sm text-slate-500">Geen aankomende wedstrijden — importeer eerst het programma.</p>
         ) : (
@@ -653,6 +679,12 @@ function WedstrijdenPageInner() {
                     </div>
                   )}
                 </div>
+                <Link
+                  href={`/wedstrijden/live/${selected.id}`}
+                  className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                >
+                  {selected.live_clock?.phase === "ft" || (selectedIsPlayed && !isLive(selected)) ? "📊 Analyse & nabespreking" : isLive(selected) ? "● Open live" : "▶ Live wedstrijd"}
+                </Link>
                 <Link
                   href={`/wedstrijden/print/${selected.id}`}
                   target="_blank"

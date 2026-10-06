@@ -96,6 +96,23 @@ export async function redactForRole(entity: EntityName, rows: Row[], role: Role)
     return rows.filter((r) => r.player_id === ownPlayerId);
   }
 
+  // Live-wedstrijdanalyse is van de staf: spelers en toeschouwers zien alleen
+  // de doelpunten (die staan toch al in de uitslag/statistieken), niet de
+  // observaties, rustpunten of nabespreking.
+  if (entity === "match_events") {
+    return rows.filter((r) => r.type === "goal_for" || r.type === "goal_against");
+  }
+
+  if (entity === "matches") {
+    return rows.map((r) => ({
+      ...r,
+      halftime_talk: null,
+      review_went_well: null,
+      review_improve: null,
+      review_training: null,
+    }));
+  }
+
   if (role !== "speler") return rows;
 
   if (entity === "match_preparations") {

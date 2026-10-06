@@ -56,6 +56,47 @@ export type Match = {
   corners_against: number | null;
   fouls_for: number | null;
   fouls_against: number | null;
+  // Live-wedstrijdmodus (zie app/(app)/wedstrijden/live) — klok gedeeld tussen
+  // alle apparaten van de staf, plus het rustpraatje en de nabespreking.
+  // Optioneel: ontbreekt bij wedstrijden die (nog) niet live gevolgd zijn.
+  live_clock?: LiveClock | null;
+  halftime_talk?: string | null;
+  review_went_well?: string | null;
+  review_improve?: string | null;
+  review_training?: string | null;
+};
+
+export type LivePhase = "pre" | "h1" | "ht" | "h2" | "ft";
+
+export type LiveClock = {
+  phase: LivePhase;
+  half_minutes: number; // speelduur per helft, JO19 = 45
+  h1_start: string | null; // ISO-tijdstempels
+  h1_end: string | null;
+  h2_start: string | null;
+  h2_end: string | null;
+};
+
+export type MatchEventType = "goal_for" | "goal_against" | "substitution" | "card_yellow" | "card_red" | "observation";
+
+// "standaard" = spelhervattingen, "overig" = alles wat niet in een KNVB-moment past (mentaliteit, coaching, scheidsrechter…)
+export type ObservationMoment = TacticalMoment | "standaard" | "overig";
+
+export type MatchEvent = {
+  id: string;
+  match_id: string;
+  half: 1 | 2;
+  minute: number; // voetbalminuut, doorlopend (2e helft begint bij half_minutes + 1)
+  type: MatchEventType;
+  player_id: string | null; // scorer / speler erin / speler met kaart / speler bij observatie
+  related_player_id: string | null; // assist / speler eruit
+  moment: ObservationMoment | null;
+  sentiment: "plus" | "min" | null;
+  note: string | null;
+  for_halftime: boolean;
+  for_review: boolean;
+  created_by_name: string | null;
+  created_at: string;
 };
 
 export type WashDuty = {
@@ -269,7 +310,14 @@ export function emptyTacticalNotes(): TacticalNotes {
 export type LineStyle = "freehand" | "pass" | "run" | "dribble";
 
 export type DrawingElement =
-  | { kind: "line"; style: LineStyle; color: string; points: { x: number; y: number }[] }
+  | {
+      kind: "line";
+      style: LineStyle;
+      color: string;
+      points: { x: number; y: number }[];
+      // Afwijkend "buigpunt" t.o.v. het midden van begin/eind — ontbreekt (of null) betekent een rechte lijn.
+      bend?: { x: number; y: number } | null;
+    }
   | { kind: "player"; team: "own" | "opponent"; x: number; y: number; number: string | null }
   | { kind: "ball"; x: number; y: number };
 
@@ -379,6 +427,7 @@ export type EntityMap = {
   exercises: Exercise;
   set_pieces: SetPiece;
   match_reflections: MatchReflection;
+  match_events: MatchEvent;
 };
 
 export type EntityName = keyof EntityMap;
@@ -405,6 +454,7 @@ export const ENTITIES: EntityName[] = [
   "exercises",
   "set_pieces",
   "match_reflections",
+  "match_events",
 ];
 
 export const TEAM_NAME = "Sv Steenwijkerwold JO19-1";

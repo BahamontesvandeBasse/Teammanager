@@ -30,8 +30,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     // spelersvoorstellen). Server-side uit de sessie gezet — nooit uit de
     // client, die dit anders zou kunnen vervalsen. Deze route is hier alleen
     // bereikbaar voor staf/beheerder (canWriteEntity hierboven); spelers
-    // suggereren via het losse /api/set-pieces/suggest-endpoint.
-    if (entity === "set_pieces") {
+    // suggereren via het losse /api/set-pieces/suggest-endpoint. Zelfde voor
+    // live-wedstrijdnotities, zodat zichtbaar is welk staflid wat noteerde.
+    if (entity === "set_pieces" || entity === "match_events") {
       const session = await auth();
       const creatorName = session?.user?.name ?? null;
       rows = rows.map((r) => ({ ...r, created_by_name: creatorName }));

@@ -3,7 +3,8 @@ import { getStore } from "@/lib/db";
 import { resolveRole } from "@/lib/auth/access";
 import { canEdit } from "@/lib/auth/roles";
 import { lineForPosition } from "@/lib/positions";
-import { Match, MatchPreparation, MatchStat, Player, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, TacticalMoment, VideoLink, VideoNote } from "@/lib/types";
+import { formatMinute, momentLabel, sortEvents } from "@/lib/live";
+import { Match, MatchEvent, MatchPreparation, MatchStat, Player, SET_PIECE_CATEGORY_LABELS, SET_PIECE_SIDE_LABELS, SetPiece, TacticalMoment, VideoLink, VideoNote } from "@/lib/types";
 
 function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -88,6 +89,40 @@ function buildMatchStatsSection(matchStats: MatchStat[], players: Player[]): str
   return sections.join("\n\n");
 }
 
+// Wat de staf live langs de lijn vastlegde (goals, wissels, kaarten, observaties)
+// plus het rustpraatje en de conclusies van de nabespreking.
+function buildLiveSection(match: Match | undefined, events: MatchEvent[], players: Player[]): string {
+  const halfMinutes = match?.live_clock?.half_minutes ?? 45;
+  const name = (id: string | null) => (id ? players.find((p) => p.id === id)?.name ?? "onbekende speler" : null);
+  const lines = sortEvents(events).map((e) => {
+    const min = formatMinute(e.minute, e.half, halfMinutes);
+    const note = e.note ? ` — ${e.note}` : "";
+    switch (e.type) {
+      case "goal_for":
+        return `- [${min}] Doelpunt voor: ${name(e.player_id) ?? "onbekend"}${e.related_player_id ? ` (assist ${name(e.related_player_id)})` : ""}${note}`;
+      case "goal_against":
+        return `- [${min}] Tegendoelpunt${e.moment ? ` (ontstaan uit: ${momentLabel(e.moment)})` : ""}${note}`;
+      case "substitution":
+        return `- [${min}] Wissel: ${name(e.player_id) ?? "?"} erin, ${name(e.related_player_id) ?? "?"} eruit`;
+      case "card_yellow":
+      case "card_red":
+        return `- [${min}] ${e.type === "card_red" ? "Rode" : "Gele"} kaart: ${name(e.player_id) ?? "?"}${note}`;
+      case "observation": {
+        const tone = e.sentiment === "plus" ? "positief" : e.sentiment === "min" ? "verbeterpunt" : "neutraal";
+        const who = name(e.player_id);
+        return `- [${min}] Observatie ${momentLabel(e.moment)} (${tone}${who ? `, ${who}` : ""}): ${e.note ?? ""}`;
+      }
+    }
+  });
+  const parts: string[] = [];
+  if (lines.length > 0) parts.push(lines.join("\n"));
+  if (match?.halftime_talk?.trim()) parts.push(`Rustpraatje van de staf:\n${match.halftime_talk.trim()}`);
+  if (match?.review_went_well?.trim()) parts.push(`Nabespreking — wat ging goed:\n${match.review_went_well.trim()}`);
+  if (match?.review_improve?.trim()) parts.push(`Nabespreking — wat kan beter:\n${match.review_improve.trim()}`);
+  if (match?.review_training?.trim()) parts.push(`Nabespreking — meenemen naar training:\n${match.review_training.trim()}`);
+  return parts.join("\n\n");
+}
+
 function buildTeamStatsLine(match: Match): string {
   const parts: string[] = [];
   if (match.score_for !== null && match.score_against !== null) parts.push(`Eindstand: ${match.score_for}-${match.score_against}`);
@@ -126,7 +161,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const store = getStore();
-    const [videoLinks, videoNotes, matches, players, preparations, setPieces, matchStats] = await Promise.all([
+    const [videoLinks, videoNotes, matches, players, preparations, setPieces, matchStats, matchEvents] = await Promise.all([
       store.list("video_links"),
       store.list("video_notes"),
       store.list("matches"),
@@ -134,6 +169,7 @@ export async function POST(req: NextRequest) {
       store.list("match_preparations"),
       store.list("set_pieces"),
       store.list("match_stats"),
+      store.list("match_events"),
     ]);
 
     const videoLink = (videoLinks as VideoLink[]).find((v) => v.id === video_link_id);
@@ -150,8 +186,11 @@ export async function POST(req: NextRequest) {
     const matchStatsForMatch = (matchStats as MatchStat[]).filter((s) => s.match_id === videoLink.match_id);
     const statsSection = buildMatchStatsSection(matchStatsForMatch, players as Player[]);
     const teamStatsLine = match ? buildTeamStatsLine(match) : "";
+    const liveEvents = (matchEvents as MatchEvent[]).filter((e) => e.match_id === videoLink.match_id);
+    const liveSection = buildLiveSection(match, liveEvents, players as Player[]);
+    const hasObservations = notes.length > 0 || liveEvents.some((e) => e.type === "observation");
 
-    if (notes.length === 0 && !prepThemes && !statsSection && !teamStatsLine) {
+    if (notes.length === 0 && !prepThemes && !statsSection && !teamStatsLine && !liveSection) {
       return NextResponse.json(
         {
           error:
@@ -180,13 +219,14 @@ export async function POST(req: NextRequest) {
       teamStatsLine ? `Teamstatistieken:\n${teamStatsLine}` : "",
       prepThemes ? `Thema's uit de wedstrijdvoorbereiding:\n${prepThemes}` : "",
       statsSection ? `Spelersstatistieken (per linie):\n${statsSection}` : "",
+      liveSection ? `Live vastgelegd door de staf tijdens de wedstrijd:\n${liveSection}` : "",
       notes.length > 0 ? `Observaties tijdens het terugkijken van de beelden:\n${noteLines}` : "",
     ]
       .filter(Boolean)
       .join("\n\n");
 
     const instructions =
-      notes.length > 0
+      hasObservations
         ? `Geef een kort, praktisch coachadvies in het Nederlands. Baseer je zoveel mogelijk op de observaties en statistieken hierboven — verzin geen observaties of cijfers die niet gegeven zijn. Structureer als volgt:
 1. Per thema uit de voorbereiding (aanvallen, verdedigen, omschakelen, spelhervattingen waar relevant): is het volgens de observaties gelukt zoals afgesproken, of niet?
 2. Team als geheel: belangrijkste sterke en zwakke punten, onderbouwd met de teamstatistieken waar beschikbaar (balbezit, schoten, schoten op doel, corners, overtredingen).
