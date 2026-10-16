@@ -54,9 +54,12 @@ export default function SchemaPage() {
       const res = await api.generateSchedule();
       await reload();
       setMsg(
-        res.wash === 0 && res.carpool === 0 && res.corvee === 0
+        res.wash === 0 && res.carpool === 0 && res.corvee === 0 && res.removed === 0
           ? "Niets aan te vullen — alles heeft al een was-, rij- en/of corveebeurt."
-          : `Aangevuld: ${res.wash} nieuwe wasbeurten, ${res.carpool} nieuwe rijbeurten en ${res.corvee} nieuwe corveebeurten. Bestaande indelingen zijn ongewijzigd gebleven.`
+          : `Aangevuld: ${res.wash} nieuwe wasbeurten, ${res.carpool} nieuwe rijbeurten en ${res.corvee} nieuwe corveebeurten.` +
+              (res.removed > 0
+                ? ` ${res.removed} bestaande beurt(en) vervangen (speler afwezig, of wasbeurt-speler toegevoegd aan de corvee van die week).`
+                : " Bestaande indelingen zijn ongewijzigd gebleven.")
       );
       setErr(false);
     } catch (e) {
@@ -133,7 +136,8 @@ export default function SchemaPage() {
       />
       <p className="mb-4 -mt-4 text-xs text-slate-500">
         Nieuwe wedstrijden toegevoegd? Klik gerust opnieuw op genereren — alleen wedstrijden zonder beurt worden aangevuld,
-        al ingedeelde spelers blijven staan.
+        al ingedeelde spelers blijven staan. Afwezige spelers worden nooit ingepland (en vanaf vandaag vervangen), en wie
+        de wasbeurt heeft zit die week ook bij de corvee.
       </p>
 
       {canEdit && (

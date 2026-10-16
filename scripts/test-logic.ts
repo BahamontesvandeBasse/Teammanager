@@ -94,7 +94,7 @@ const matches: Match[] = Array.from({ length: 22 }, (_, i) => ({
   fouls_against: null,
 }));
 
-const { wash, carpool } = generateSchedule(players, matches);
+const { wash, carpool } = generateSchedule(players, matches, [], [], [], "2000-01-01");
 check("Rotatie: elke wedstrijd 1 wasbeurt", wash.length === 22);
 
 const awayCount = matches.filter((m) => m.home_away === "away").length;
@@ -162,7 +162,7 @@ const absences0: Absence[] = [
 // alle testweken (2025) in het verleden t.o.v. de echte huidige datum en
 // filtert generateCorveeSchedule ze allemaal weg.
 const fixtureToday = corveeSchedule[0].date;
-const corvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], fixtureToday);
+const corvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], fixtureToday).add;
 const corveeWeeksCount = new Set(corveeSchedule.map((s) => mondayOfWeek(s.date))).size;
 check("Corvee: 3 spelers per trainingsweek", corvee.length === corveeWeeksCount * 3, `${corvee.length} vs ${corveeWeeksCount * 3}`);
 
@@ -191,7 +191,7 @@ const corveeMultiMatch = generateCorveeSchedule(
   absences0,
   [],
   fixtureToday
-);
+).add;
 const week0MultiDuties = corveeMultiMatch.filter((c) => c.week_start === week0).map((c) => c.player_id);
 check(
   "Corvee: bij 2 wedstrijden in dezelfde week horen beide wasbeurt-spelers erbij",
@@ -211,13 +211,66 @@ check("Corvee: niemand 2 weken achter elkaar (met genoeg spelers om te rouleren)
 
 // Opnieuw genereren met de al aangemaakte rijen als "bestaand" mag niks toevoegen.
 const corveeAgain = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, corvee, fixtureToday);
-check("Corvee: opnieuw genereren voegt niks toe aan al ingevulde weken", corveeAgain.length === 0, `${corveeAgain.length} nieuwe rijen`);
+check("Corvee: opnieuw genereren verandert niks aan al ingevulde weken", corveeAgain.add.length === 0 && corveeAgain.removeIds.length === 0, JSON.stringify(corveeAgain));
 
 // Weken vóór "vandaag" tellen niet mee, ook al hebben ze nog geen corvee.
 const pastWeekToday = corveeSchedule[corveeSchedule.length - 1].date; // laatste trainingsdatum = "nu"
-const corveeFromNow = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], pastWeekToday);
+const corveeFromNow = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, [], pastWeekToday).add;
 const onlyCurrentWeek = new Set(corveeFromNow.map((c) => c.week_start)).size === 1;
 check("Corvee: weken vóór de huidige week worden overgeslagen", onlyCurrentWeek, JSON.stringify([...new Set(corveeFromNow.map((c) => c.week_start))]));
+
+// ---------- 7. Afwezigheid is hard ----------
+const absentMatchPlayer = "p0";
+const absenceSeason: Absence[] = [
+  { ...absences0[0], id: "a-season", player_id: absentMatchPlayer, from: "2025-09-01", until: "2025-12-31" },
+];
+const withAbsence = generateSchedule(players, matches, [], [], absenceSeason, "2000-01-01");
+check(
+  "Afwezig: geen was- of rijbeurt voor afwezige speler",
+  ![...withAbsence.wash, ...withAbsence.carpool].some((d) => d.player_id === absentMatchPlayer)
+);
+check("Afwezig: elke wedstrijd houdt een wasbeurt", withAbsence.wash.length === matches.length);
+
+// Bestaande toekomstige beurten van een afwezige speler worden vervangen; uit het verleden blijven staan.
+const pastMatch = matches[0]; // home, 2025-09-01
+const futureAway = matches[3]; // away, 2025-09-10
+const existingWashAbs = [
+  { id: "ew-past", match_id: pastMatch.id, player_id: absentMatchPlayer },
+  { id: "ew-future", match_id: futureAway.id, player_id: absentMatchPlayer },
+];
+const existingCarAbs = ["p0", "p1", "p2", "p3"].map((pid, i) => ({ id: `ec${i}`, match_id: futureAway.id, player_id: pid }));
+const repaired = generateSchedule(players, matches, existingWashAbs, existingCarAbs, absenceSeason, "2025-09-05");
+check("Afwezig: toekomstige wasbeurt verwijderd, verleden niet", JSON.stringify(repaired.removeWashIds) === '["ew-future"]', JSON.stringify(repaired.removeWashIds));
+check("Afwezig: toekomstige rijbeurt verwijderd", JSON.stringify(repaired.removeCarpoolIds) === '["ec0"]', JSON.stringify(repaired.removeCarpoolIds));
+const refillCar = repaired.carpool.filter((c) => c.match_id === futureAway.id);
+check("Afwezig: rijders aangevuld met 1 vervanger", refillCar.length === 1 && refillCar[0].player_id !== absentMatchPlayer, JSON.stringify(refillCar));
+check("Afwezig: wasbeurt opnieuw ingevuld", repaired.wash.some((w) => w.match_id === futureAway.id && w.player_id !== absentMatchPlayer));
+
+// Corvee: bestaande week met afwezige speler en zonder de wasbeurt-speler wordt gecorrigeerd.
+const weekPlayers = corveePlayers.map((p) => p.id);
+const existingWeek0 = [weekPlayers[5], weekPlayers[6], weekPlayers[7]].map((pid, i) => ({
+  id: `ecv${i}`,
+  week_start: week0,
+  player_id: pid,
+}));
+const fixedCorvee = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, absences0, existingWeek0, fixtureToday);
+const week0After = new Set(existingWeek0.map((c) => c.player_id));
+existingWeek0.filter((c) => fixedCorvee.removeIds.includes(c.id)).forEach((c) => week0After.delete(c.player_id));
+fixedCorvee.add.filter((c) => c.week_start === week0).forEach((c) => week0After.add(c.player_id));
+check("Corvee bestaand: afwezige speler eruit", !week0After.has(absentPlayer), JSON.stringify([...week0After]));
+check("Corvee bestaand: wasbeurt-speler erin", week0After.has(corveePlayers[0].id), JSON.stringify([...week0After]));
+check("Corvee bestaand: ploeg blijft 3 spelers", week0After.size === 3, JSON.stringify([...week0After]));
+check("Corvee bestaand: alleen de afwezige verwijderd", JSON.stringify(fixedCorvee.removeIds) === '["ecv0"]', JSON.stringify(fixedCorvee.removeIds));
+
+// Week zonder afwezige maar zonder wasbeurt-speler: wasbeurt-speler vervangt er één.
+const existingWeek0b = existingWeek0.map((c, i) => ({ ...c, player_id: weekPlayers[8 + i] }));
+const swapped = generateCorveeSchedule(players, corveeSchedule, matchWeek0, wash0, [], existingWeek0b, fixtureToday);
+const swappedWeek0 = swapped.add.filter((c) => c.week_start === week0);
+check(
+  "Corvee bestaand: wasbeurt-speler wisselt met 1 bestaande speler",
+  swapped.removeIds.length === 1 && swappedWeek0.length === 1 && swappedWeek0[0].player_id === corveePlayers[0].id,
+  JSON.stringify({ removeIds: swapped.removeIds, add: swappedWeek0 })
+);
 
 console.log(failures === 0 ? "\nAlles geslaagd ✅" : `\n${failures} test(s) gefaald ❌`);
 process.exit(failures === 0 ? 0 : 1);
